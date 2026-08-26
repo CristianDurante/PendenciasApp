@@ -1,0 +1,350 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/client"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Empresa {
+  id        String   @id @default(cuid())
+  nome      String
+  cnpj      String?
+  logo      String?
+  email     String?
+  telefone  String?
+  config    String? // JSON: notificacoes, lembretes, backup, tema
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuarios  Usuario[]
+  clientes  Cliente[]
+
+  @@map("empresas")
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  perfil       String   @default("USUARIO") // ADMIN | GESTOR | USUARIO
+  cargo        String?
+  telefone     String?
+  avatar       String?
+  ativo        Boolean  @default(true)
+  empresaId    String?
+  ultimoAcesso DateTime?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  empresa      Empresa?        @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  pendenciasCriadas Pendencia[] @relation("PendenciaCriador")
+  pendenciasResponsavel Pendencia[] @relation("PendenciaResponsavel")
+  comentarios  Comentario[]
+  anexos       Anexo[]
+  notas        Nota[]
+  compromissos Compromisso[]  @relation("CompromissoResponsavel")
+  retornos     Retorno[]
+  notificacoes Notificacao[]
+  sessoes      Sessao[]
+  lembretes    Lembrete[]
+  projetos     Projeto[]    @relation("ProjetoResponsavel")
+  historicos   Historico[]
+
+  @@map("usuarios")
+}
+
+model Cliente {
+  id                String   @id @default(cuid())
+  nome              String
+  empresa           String?
+  cnpj              String?
+  contato           String?
+  email             String?
+  telefone          String?
+  sistema           String?
+  projeto           String?
+  responsavelInterno String?
+  observacoes       String?
+  ativo             Boolean  @default(true)
+  empresaId         String?
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  empresaRef  Empresa?   @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  pendencias  Pendencia[]
+  projetos    Projeto[]
+  compromissos Compromisso[]
+  retornos    Retorno[]
+  notas       Nota[]
+
+  @@map("clientes")
+}
+
+model Projeto {
+  id            String   @id @default(cuid())
+  nome          String
+  descricao     String?
+  status        String   @default("ATIVO") // ATIVO | PAUSADO | CONCLUIDO | ENCERRADO
+  responsavelId String?
+  clienteId     String?
+  dataInicio    DateTime?
+  dataFim       DateTime?
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  cliente      Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  responsavel  Usuario?     @relation("ProjetoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  pendencias   Pendencia[]
+
+  @@map("projetos")
+}
+
+model Categoria {
+  id        String   @id @default(cuid())
+  nome      String
+  cor       String   @default("#64748b")
+  padrao    Boolean  @default(false)
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  pendencias Pendencia[]
+
+  @@map("categorias")
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  nome        String
+  cor         String   @default("#3b82f6")
+  descricao   String?
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  pendencias  PendenciaTag[]
+
+  @@map("tags")
+}
+
+model Pendencia {
+  id            String   @id @default(cuid())
+  titulo        String
+  descricao     String?
+  clienteId     String?
+  projetoId     String?
+  sistema       String?
+  responsavelId String?
+  criadorId     String
+  criadoEm      DateTime @default(now())
+  prazo         DateTime?
+  horario       String?
+  prioridade    String   @default("NORMAL") // BAIXA | NORMAL | ALTA | URGENTE
+  categoriaId   String?
+  departamento  String?
+  status        String   @default("A_FAZER") // A_FAZER | EM_ANDAMENTO | AGUARDANDO_RETORNO | BLOQUEADA | CONCLUIDA | CANCELADA
+  observacoes   String?
+  concluidaEm   DateTime?
+  recorrencia   String? // JSON: {tipo, intervalo, ...}
+  ultimaAtualizacao DateTime @updatedAt
+
+  criador    Usuario?        @relation("PendenciaCriador", fields: [criadorId], references: [id], onDelete: Restrict)
+  responsavel Usuario?       @relation("PendenciaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  cliente    Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  projeto    Projeto?        @relation(fields: [projetoId], references: [id], onDelete: SetNull)
+  categoria  Categoria?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  tags       PendenciaTag[]
+  comentarios Comentario[]
+  anexos     Anexo[]
+  checklist  ChecklistItem[]
+  notas      Nota[]
+
+  @@index([status])
+  @@index([prazo])
+  @@index([clienteId])
+  @@index([projetoId])
+  @@index([responsavelId])
+  @@map("pendencias")
+}
+
+model PendenciaTag {
+  pendenciaId String
+  tagId       String
+
+  pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([pendenciaId, tagId])
+  @@map("pendencia_tags")
+}
+
+model Comentario {
+  id        String   @id @default(cuid())
+  pendenciaId String
+  usuarioId String
+  conteudo  String
+  criadoEm  DateTime @default(now())
+
+  pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("comentarios")
+}
+
+model Anexo {
+  id          String   @id @default(cuid())
+  pendenciaId String
+  usuarioId   String
+  nomeOriginal String
+  arquivo     String // nome do arquivo no disco
+  tipo        String // extensao
+  tamanho     Int
+  criadoEm    DateTime @default(now())
+
+  pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("anexos")
+}
+
+model ChecklistItem {
+  id          String   @id @default(cuid())
+  pendenciaId String
+  descricao   String
+  concluido   Boolean  @default(false)
+  concluidoEm DateTime?
+  criadoEm    DateTime @default(now())
+
+  pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+
+  @@map("checklist_items")
+}
+
+model Nota {
+  id           String   @id @default(cuid())
+  titulo       String
+  conteudo     String?
+  clienteId    String?
+  projetoId    String?
+  pendenciaId  String?
+  compromissoId String?
+  usuarioId    String
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  cliente    Cliente?    @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  pendencia  Pendencia?  @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+  compromisso Compromisso? @relation("NotaCompromisso", fields: [compromissoId], references: [id], onDelete: SetNull)
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notas")
+}
+
+model Compromisso {
+  id              String   @id @default(cuid())
+  titulo          String
+  clienteId       String?
+  projetoId       String?
+  responsavelId   String?
+  data            DateTime
+  horaInicio      String?
+  horaFim         String?
+  local           String?
+  link            String?
+  participantes   String?
+  descricao       String?
+  observacoes     String?
+  lembreteMinutos Int? // 1440 | 120 | 60 | 30 | 15
+  lembreteDisparado Boolean @default(false)
+  status          String   @default("AGENDADO") // AGENDADO | CONFIRMADO | CONCLUIDO | CANCELADO
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  cliente  Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  responsavel Usuario? @relation("CompromissoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  notas    Nota[]    @relation("NotaCompromisso")
+
+  @@map("compromissos")
+}
+
+model Retorno {
+  id             String   @id @default(cuid())
+  clienteId      String?
+  contato        String?
+  assunto        String
+  dataPrevista   DateTime?
+  horario        String?
+  responsavelId  String?
+  observacao     String?
+  status         String   @default("PENDENTE") // PENDENTE | EM_CONTATO | AGUARDANDO_CLIENTE | RESPONDIDO | CONCLUIDO
+  criadoEm       DateTime @default(now())
+  concluidoEm    DateTime?
+  atualizadoEm   DateTime @updatedAt
+
+  cliente    Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  responsavel Usuario? @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  @@map("retornos")
+}
+
+model Historico {
+  id          String   @id @default(cuid())
+  entidade    String // pendencia | cliente | projeto | compromisso | retorno | tag | anexo | nota
+  entidadeId  String
+  usuarioId   String?
+  tipo        String
+  descricao   String
+  detalhes    String? // JSON
+  dataHora    DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([entidade, entidadeId])
+  @@map("historicos")
+}
+
+model Notificacao {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  tipo          String
+  titulo        String
+  mensagem      String?
+  relacionadoId String?
+  lida          Boolean  @default(false)
+  criadoEm      DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("notificacoes")
+}
+
+model Lembrete {
+  id          String   @id @default(cuid())
+  usuarioId   String?
+  entidade    String?
+  entidadeId  String?
+  dataHora    DateTime
+  mensagem    String
+  disparado   Boolean  @default(false)
+  criadoEm    DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("lembretes")
+}
+
+model Sessao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  token     String   @unique
+  criadoEm  DateTime @default(now())
+  expiraEm  DateTime
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("sessoes")
+}
