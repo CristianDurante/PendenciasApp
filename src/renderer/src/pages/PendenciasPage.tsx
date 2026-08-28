@@ -16,6 +16,8 @@ export function PendenciasPage(): ReactNode {
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
   const carregarDashboard = useAppStore((s) => s.carregarDashboard)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
+  const dataVersao = useAppStore((s) => s.dataVersao)
   const clientes = useCatalogoStore((s) => s.clientes)
   const projetos = useCatalogoStore((s) => s.projetos)
   const usuarios = useCatalogoStore((s) => s.usuarios)
@@ -56,22 +58,46 @@ export function PendenciasPage(): ReactNode {
   const prazoHoje = filtroPrazoInicial === 'hoje'
   const prazoProximas = filtroPrazoInicial === 'proximas'
 
-  const { itens, total, pagina, porPagina, carregando, atualizarFiltro, filtro, recarregar } = usePendencias({
-    status: status.length ? status : undefined,
-    prioridade: prioridades.length ? prioridades : undefined,
-    clienteId: clienteId || undefined,
-    projetoId: projetoId || undefined,
-    responsavelId: responsavelId || undefined,
-    categoriaId: categoriaId || undefined,
-    tags: tagsSel.length ? tagsSel : undefined,
-    prazoDe: prazoDe || undefined,
-    prazoAte: prazoAte || undefined,
-    atrasadas,
-    semResponsavel,
-    busca: busca || undefined,
-    prazoHoje,
-    prazoProximas
-  } as never)
+  const [buscaDebounced, setBuscaDebounced] = useState(busca)
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 300)
+    return () => clearTimeout(t)
+  }, [busca])
+
+  const { itens, total, pagina, porPagina, carregando, atualizarFiltro, filtro, recarregar } = usePendencias({} as never)
+
+  useEffect(() => {
+    atualizarFiltro({
+      status: status.length ? status : undefined,
+      prioridade: prioridades.length ? prioridades : undefined,
+      clienteId: clienteId || undefined,
+      projetoId: projetoId || undefined,
+      responsavelId: responsavelId || undefined,
+      categoriaId: categoriaId || undefined,
+      tags: tagsSel.length ? tagsSel : undefined,
+      prazoDe: prazoDe || undefined,
+      prazoAte: prazoAte || undefined,
+      atrasadas,
+      semResponsavel,
+      busca: buscaDebounced || undefined,
+      prazoHoje,
+      prazoProximas
+    } as never)
+  }, [status, prioridades, clienteId, projetoId, responsavelId, categoriaId, tagsSel, prazoDe, prazoAte, atrasadas, semResponsavel, buscaDebounced, prazoHoje, prazoProximas, atualizarFiltro])
+
+  useEffect(() => {
+    if (dataVersao > 0) void recarregar()
+  }, [dataVersao, recarregar])
+
+  useEffect(() => {
+    const s = params.get('status')
+    const q = params.get('q')
+    const semResp = params.get('semResponsavel')
+    setStatus(s === 'atrasadas' ? [] : s === 'EM_ANDAMENTO' || s === 'CONCLUIDA' || s === 'AGUARDANDO_RETORNO' ? [s] : [])
+    setAtrasadas(s === 'atrasadas')
+    setSemResponsavel(semResp === '1')
+    if (q !== null) setBusca(q)
+  }, [params])
 
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina))
 
@@ -86,6 +112,7 @@ export function PendenciasPage(): ReactNode {
     setSelecionadas([])
     await recarregar()
     void carregarDashboard(true)
+    notificarMudanca()
     pushToast('sucesso', 'Pendências concluídas', `${selecionadas.length} pendência(s) concluída(s).`)
   }
 
@@ -99,6 +126,7 @@ export function PendenciasPage(): ReactNode {
     setSelecionadas([])
     await recarregar()
     void carregarDashboard(true)
+    notificarMudanca()
     pushToast('sucesso', 'Pendências excluídas')
   }
 
@@ -115,7 +143,6 @@ export function PendenciasPage(): ReactNode {
     setPrazoAte('')
     setAtrasadas(false)
     setSemResponsavel(false)
-    atualizarFiltro({})
   }
 
   const temFiltroAtivo =

@@ -128,6 +128,61 @@ async function run(): Promise<void> {
   if (invalida.ok) throw new Error('token inválido deveria falhar')
   print('permissoes.token', invalida.error)
 
+  // Convite por e-mail
+  const convite = (await api('usuario', 'convidar', {
+    email: 'convite@empresa.com',
+    nome: 'Novo Usuário',
+    perfil: 'USUARIO'
+  })) as { id: string; token: string; expiraEm: string }
+  print('usuario.convidar', { id: convite.id, expiraEm: convite.expiraEm })
+  if (!convite.token || convite.token.split('-').length !== 3) throw new Error('convite deveria ter código XXXX-XXXX-XXXX')
+
+  const convites = (await api('usuario', 'convites')) as { pendentes: Array<{ id: string }>; historico: unknown[] }
+  print('usuario.convites', { pendentes: convites.pendentes.length })
+  if (!convites.pendentes.some((c) => c.id === convite.id)) throw new Error('convite deveria estar na lista de pendentes')
+
+  // Convite duplicado nao pode
+  const dup = await dispatch({
+    resource: 'usuario',
+    action: 'convidar',
+    args: { email: 'convite@empresa.com', nome: 'Duplicado', perfil: 'USUARIO' },
+    token
+  })
+  if (dup.ok) throw new Error('convite duplicado deveria falhar')
+  print('usuario.convidar.duplicado', dup.error)
+
+  // Aceitar convite (cria usuario e sessao)
+  const aceite = await dispatch({
+    resource: 'auth',
+    action: 'aceitarConvite',
+    args: { email: 'convite@empresa.com', codigo: convite.token, nome: 'Novo Usuário', senha: '123456' }
+  })
+  if (!aceite.ok) throw new Error('aceitarConvite falhou: ' + aceite.error)
+  print('auth.aceitarConvite', 'ok')
+
+  // Novo usuario consegue logar
+  const loginNovo = (await dispatch({
+    resource: 'auth',
+    action: 'login',
+    args: { email: 'convite@empresa.com', senha: '123456' }
+  })) as { ok: boolean; data: { sessao: { token: string; usuario: { nome: string; perfil: string } } } }
+  if (!loginNovo.ok) throw new Error('login do convidado falhou')
+  print('auth.login(convidado)', { nome: loginNovo.data.sessao.usuario.nome, perfil: loginNovo.data.sessao.usuario.perfil })
+
+  // USUARIO convidado nao pode convidar outros
+  const negadoConvite = await dispatch({
+    resource: 'usuario',
+    action: 'convidar',
+    args: { email: 'outro@empresa.com', nome: 'Outro', perfil: 'USUARIO' },
+    token: loginNovo.data.sessao.token
+  })
+  if (negadoConvite.ok) throw new Error('USUARIO não deveria convidar outros usuários')
+  print('permissoes.convidar', negadoConvite.error)
+
+  const negadoConvites = await dispatch({ resource: 'usuario', action: 'convites', token: loginNovo.data.sessao.token })
+  if (negadoConvites.ok) throw new Error('USUARIO não deveria listar convites')
+  print('permissoes.listarConvites', negadoConvites.error)
+
   console.log('\n=== TODOS OS TESTES HEADLESS PASSARAM ===')
   process.exit(0)
 }

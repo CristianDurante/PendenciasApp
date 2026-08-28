@@ -5,7 +5,6 @@ import { getPrisma } from './db'
 import { addDays, isAfter } from 'date-fns'
 
 const SESSION_DAYS = 30
-
 export class AppError extends Error {
   status: number
   constructor(message: string, status = 400) {
@@ -96,6 +95,42 @@ export async function login(email: string, senha: string): Promise<LoginResult> 
     throw new AppError('E-mail ou senha inválidos', 401)
   }
   if (!usuario.ativo) throw new AppError('Usuário desativado. Contate o administrador.', 403)
+  const sessao = await criarSessao(usuario.id)
+  return { sessao }
+}
+
+export async function aceitarConvite(
+  email: string,
+  token: string,
+  nome: string,
+  senha: string
+): Promise<LoginResult> {
+  const db = getPrisma()
+  const emailNorm = email.trim().toLowerCase()
+  if (senha.length < 6) throw new AppError('A senha deve ter no mínimo 6 caracteres')
+  const convite = await db.convite.findFirst({
+    where: { email: emailNorm, token: token.trim().toUpperCase() }
+  })
+  if (!convite) throw new AppError('Convite não encontrado. Verifique o e-mail e o código.', 404)
+  if (convite.usadoEm) throw new AppError('Este convite já foi utilizado')
+  if (convite.canceladoEm) throw new AppError('Este convite foi cancelado')
+  if (isAfter(new Date(), convite.expiraEm)) throw new AppError('Este convite expirou. Solicite um novo ao administrador.')
+  const existente = await db.usuario.findUnique({ where: { email: emailNorm } })
+  if (existente) throw new AppError('Já existe um usuário com este e-mail')
+
+  const usuario = await db.usuario.create({
+    data: {
+      nome: nome.trim().slice(0, 120),
+      email: emailNorm,
+      senhaHash: hashPassword(senha),
+      perfil: convite.perfil as Perfil,
+      cargo: convite.cargo,
+      telefone: convite.telefone,
+      empresaId: convite.empresaId,
+      ativo: true
+    }
+  })
+  await db.convite.update({ where: { id: convite.id }, data: { usadoEm: new Date() } })
   const sessao = await criarSessao(usuario.id)
   return { sessao }
 }

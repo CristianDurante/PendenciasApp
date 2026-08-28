@@ -12,6 +12,7 @@ export function PendenciaModal(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const recarregarCatalogo = useCatalogoStore((s) => s.recarregar)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
 
   const [dados, setDados] = useState<PendenciaFormData>({
     titulo: '',
@@ -99,6 +100,7 @@ export function PendenciaModal(): ReactNode {
       abrirPendencia(pendencia)
       fechar()
       void recarregarCatalogo()
+      notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Erro ao salvar', (e as Error).message)
     } finally {

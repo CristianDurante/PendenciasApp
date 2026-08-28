@@ -6,7 +6,6 @@ import { cn } from '../../lib/format'
 
 const titulosPorRota: Record<string, string> = {
   '/': 'Dashboard',
-  '/meu-dia': 'Meu Dia',
   '/minhas-atividades': 'Minhas Atividades',
   '/pendencias': 'Pendências',
   '/kanban': 'Kanban',
@@ -36,7 +35,7 @@ export function Topbar({ rota }: { rota: string }): ReactNode {
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
-      <h1 className="flex-1 truncate text-lg font-bold text-slate-900 dark:text-white">{titulo ?? 'Pendify'}</h1>
+      <h1 className="flex-1 truncate text-lg font-bold text-slate-900 dark:text-white">{titulo ?? 'Pendencias App'}</h1>
 
       <button
         onClick={() => setPainelBusca(true)}

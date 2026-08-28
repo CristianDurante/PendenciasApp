@@ -348,3 +348,21 @@ model Sessao {
 
   @@map("sessoes")
 }
+
+model Convite {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique
+  nome        String
+  perfil      String    @default("USUARIO") // ADMIN | GESTOR | USUARIO
+  cargo       String?
+  telefone    String?
+  empresaId   String?
+  criadoPorId String
+  criadoEm    DateTime  @default(now())
+  expiraEm    DateTime
+  usadoEm     DateTime?
+  canceladoEm DateTime?
+
+  @@map("convites")
+}

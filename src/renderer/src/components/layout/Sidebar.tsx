@@ -2,7 +2,6 @@ import { type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Sun,
   ListTodo,
   Columns3,
   CalendarDays,
@@ -23,7 +22,6 @@ import { Avatar } from '../ui'
 
 const itens = [
   { to: '/', label: 'Dashboard', icone: <LayoutDashboard className="h-4.5 w-4.5 h-[18px] w-[18px]" /> },
-  { to: '/meu-dia', label: 'Meu Dia', icone: <Sun className="h-[18px] w-[18px]" /> },
   { to: '/minhas-atividades', label: 'Minhas Atividades', icone: <ClipboardList className="h-[18px] w-[18px]" /> },
   { to: '/pendencias', label: 'Pendências', icone: <ListTodo className="h-[18px] w-[18px]" /> },
   { to: '/kanban', label: 'Kanban', icone: <Columns3 className="h-[18px] w-[18px]" /> },
@@ -46,8 +44,8 @@ export function Sidebar(): ReactNode {
       <div className="flex items-center gap-2 px-4 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-lg font-black text-white">P</div>
         <div>
-          <p className="text-base font-bold leading-tight text-slate-900 dark:text-white">Pendify</p>
-          <p className="text-[11px] text-slate-400">Controle profissional</p>
+          <p className="text-base font-bold leading-tight text-slate-900 dark:text-white">Pendencias App</p>
+          <p className="text-[11px] text-slate-400">Controle de pendências</p>
         </div>
       </div>
 

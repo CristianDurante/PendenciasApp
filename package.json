@@ -1,8 +1,8 @@
 {
-  "name": "pendify",
+  "name": "pendencias-app",
   "version": "0.1.0",
-  "description": "Pendify - Controle profissional de pendências, demandas, compromissos e atividades operacionais",
-  "author": "Pendify",
+  "description": "Pendencias App - Controle profissional de pendências, demandas, compromissos e atividades operacionais",
+  "author": "Pendencias App",
   "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {

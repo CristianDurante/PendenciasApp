@@ -1,7 +1,7 @@
 import type { ApiContext, ApiRequest, ApiResponse } from '@shared/types'
 import { AppError, encerrarSessao, validarToken, obterUsuarioPorId, hashPassword, verifyPassword } from '../auth'
 import { getPrisma } from '../db'
-import { login as serviceLogin } from '../auth'
+import { login as serviceLogin, aceitarConvite as serviceAceitarConvite } from '../auth'
 
 import * as empresaService from './empresa.service'
 import * as usuarioService from './usuario.service'
@@ -39,7 +39,10 @@ export const registry: Record<string, Record<string, Handler>> = {
     obter: (ctx, a) => usuarioService.obterUsuario(ctx, a),
     criar: (ctx, a) => usuarioService.criarUsuario(ctx, a),
     atualizar: (ctx, a) => usuarioService.atualizarUsuario(ctx, a),
-    excluir: (ctx, a) => usuarioService.excluirUsuario(ctx, a)
+    excluir: (ctx, a) => usuarioService.excluirUsuario(ctx, a),
+    convidar: (ctx, a) => usuarioService.convidarUsuario(ctx, a),
+    convites: (ctx, a) => usuarioService.listarConvites(ctx, a),
+    cancelarConvite: (ctx, a) => usuarioService.cancelarConvite(ctx, a)
   },
   categoria: {
     listar: (ctx, a) => categoriaService.listarCategorias(),
@@ -188,6 +191,16 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
     if (req.resource === 'auth' && req.action === 'logout') {
       if (req.token) await encerrarSessao(req.token)
       return { ok: true, data: { ok: true } }
+    }
+    if (req.resource === 'auth' && req.action === 'aceitarConvite') {
+      const args = (req.args || {}) as Record<string, unknown>
+      const resultado = await serviceAceitarConvite(
+        String(args.email || ''),
+        String(args.codigo || ''),
+        String(args.nome || ''),
+        String(args.senha || '')
+      )
+      return { ok: true, data: resultado }
     }
     const ctx = await validarToken(req.token || '')
     const recurso = registry[req.resource]

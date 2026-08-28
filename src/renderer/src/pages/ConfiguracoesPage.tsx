@@ -14,9 +14,12 @@ import {
   Archive,
   RefreshCw,
   LogOut,
-  Lock
+  Lock,
+  Mail,
+  Copy,
+  TicketCheck
 } from 'lucide-react'
-import type { Usuario, Categoria, Tag, Empresa, ConfigApp, BackupInfo } from '@shared/types'
+import type { Usuario, Categoria, Tag, Empresa, ConfigApp, BackupInfo, Convite } from '@shared/types'
 import { PERFIS, PERFIL_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
 import { useCatalogoStore } from '../store/catalogoStore'
@@ -271,9 +274,23 @@ function UsuariosSection(): ReactNode {
   const [form, setForm] = useState({ nome: '', email: '', senha: '', perfil: 'USUARIO', cargo: '', telefone: '' })
   const [salvando, setSalvando] = useState(false)
 
+  const [modalConvite, setModalConvite] = useState(false)
+  const [conviteForm, setConviteForm] = useState({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '' })
+  const [conviteResultado, setConviteResultado] = useState<Convite | null>(null)
+  const [convites, setConvites] = useState<Convite[]>([])
+  const [convitesHistorico, setConvitesHistorico] = useState<Convite[]>([])
+  const [salvandoConvite, setSalvandoConvite] = useState(false)
+
+  const carregarConvites = useCallback(async (): Promise<void> => {
+    const r = await call<{ pendentes: Convite[]; historico: Convite[] }>('usuario', 'convites', {}).catch(() => null)
+    setConvites(r?.pendentes ?? [])
+    setConvitesHistorico(r?.historico ?? [])
+  }, [])
+
   useEffect(() => {
     void carregarCatalogo(true)
-  }, [carregarCatalogo])
+    void carregarConvites()
+  }, [carregarCatalogo, carregarConvites])
 
   function abrirModal(u: Usuario | null): void {
     setEditando(u)
@@ -282,6 +299,14 @@ function UsuariosSection(): ReactNode {
   }
 
   async function salvar(): Promise<void> {
+    if (!form.nome.trim() || !form.email.trim()) {
+      pushToast('erro', 'Informe nome e e-mail.')
+      return
+    }
+    if (!editando && (!form.senha || form.senha.length < 6)) {
+      pushToast('erro', 'Informe uma senha de acesso com no mínimo 6 caracteres.')
+      return
+    }
     setSalvando(true)
     try {
       if (editando) {
@@ -290,7 +315,7 @@ function UsuariosSection(): ReactNode {
         await call('usuario', 'atualizar', { id: editando.id, ...payload })
         pushToast('sucesso', 'Usuário atualizado')
       } else {
-        await call('usuario', 'criar', { ...form, senha: form.senha || '123456' })
+        await call('usuario', 'criar', { ...form, senha: form.senha })
         pushToast('sucesso', 'Usuário criado')
       }
       setModalAberto(false)
@@ -299,6 +324,33 @@ function UsuariosSection(): ReactNode {
       pushToast('erro', 'Falha ao salvar usuário', e instanceof Error ? e.message : undefined)
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function enviarConvite(): Promise<void> {
+    if (!conviteForm.nome.trim() || !conviteForm.email.trim()) {
+      pushToast('erro', 'Informe nome e e-mail do convidado.')
+      return
+    }
+    setSalvandoConvite(true)
+    try {
+      const convite = await call<Convite>('usuario', 'convidar', { ...conviteForm })
+      setConviteResultado(convite)
+      await carregarConvites()
+    } catch (e) {
+      pushToast('erro', 'Falha ao enviar convite', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSalvandoConvite(false)
+    }
+  }
+
+  async function cancelarConvite(id: string): Promise<void> {
+    try {
+      await call('usuario', 'cancelarConvite', { id })
+      pushToast('sucesso', 'Convite cancelado')
+      await carregarConvites()
+    } catch (e) {
+      pushToast('erro', 'Falha ao cancelar', e instanceof Error ? e.message : undefined)
     }
   }
 
@@ -314,12 +366,65 @@ function UsuariosSection(): ReactNode {
     }
   }
 
+  function copiarCodigo(codigo: string): void {
+    void navigator.clipboard.writeText(codigo).then(() => pushToast('sucesso', 'Código copiado'))
+  }
+
+  function abrirEmailConvite(c: Convite): void {
+    const assunto = encodeURIComponent('Convite de acesso - Pendencias App')
+    const corpo = encodeURIComponent(
+      `Olá,\n\nVocê foi convidado(a) para usar o Pendencias App.\n\nPara criar seu acesso, abra o aplicativo, escolha "Tenho convite" e informe:\n\nE-mail: ${c.email}\nCódigo do convite: ${c.token}\n\nDepois é só criar a sua senha para começar a usar.`
+    )
+    window.location.href = `mailto:${c.email}?subject=${assunto}&body=${corpo}`
+  }
+
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Usuários</h2>
-        <Button onClick={() => abrirModal(null)}><Plus className="h-4 w-4" /> Novo usuário</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => { setConviteResultado(null); setConviteForm({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '' }); setModalConvite(true) }}>
+            <Mail className="h-4 w-4" /> Convidar por e-mail
+          </Button>
+          <Button onClick={() => abrirModal(null)}><Plus className="h-4 w-4" /> Novo usuário</Button>
+        </div>
       </div>
+
+      {convites.length > 0 && (
+        <div className="mb-4">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
+            <TicketCheck className="h-4 w-4 text-brand-500" /> Convites pendentes
+          </h3>
+          <div className="card divide-y divide-slate-100 dark:divide-slate-800">
+            {convites.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{c.email}</p>
+                  <p className="truncate text-xs text-slate-400">
+                    {PERFIL_LABEL[c.perfil]} · expira em {formatarDataHora(c.expiraEm)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => copiarCodigo(c.token || '')}
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs text-slate-600 transition hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:text-slate-300"
+                    title="Copiar código do convite"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> {c.token}
+                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => abrirEmailConvite(c)} title="Enviar e-mail de convite">
+                    <Mail className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void cancelarConvite(c.id)} title="Cancelar convite">
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card divide-y divide-slate-100 dark:divide-slate-800">
         {usuarios.length === 0 ? <EmptyState titulo="Nenhum usuário" /> : usuarios.map((u) => (
           <div key={u.id} className="flex items-center gap-3 px-4 py-3">
@@ -353,7 +458,7 @@ function UsuariosSection(): ReactNode {
             <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} type="email" />
           </div>
           <div>
-            <label className="label">{editando ? 'Nova senha (opcional)' : 'Senha'}</label>
+            <label className="label">{editando ? 'Nova senha (opcional)' : 'Senha *'}</label>
             <Input value={form.senha} onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))} type="password" placeholder={editando ? 'Deixe vazio para manter' : 'Mínimo 6 caracteres'} />
           </div>
           <div>
@@ -375,6 +480,63 @@ function UsuariosSection(): ReactNode {
           <Button variant="secondary" onClick={() => setModalAberto(false)}>Cancelar</Button>
           <Button onClick={() => void salvar()} carregando={salvando}>Salvar</Button>
         </div>
+      </Modal>
+
+      <Modal aberto={modalConvite} aoFechar={() => setModalConvite(false)} titulo="Convidar usuário" largura="max-w-lg">
+        {conviteResultado ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+              Convite criado para <b>{conviteResultado.email}</b>. Compartilhe o código abaixo com a pessoa para que ela crie a própria senha de acesso.
+            </div>
+            <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50 p-4 text-center dark:border-brand-700 dark:bg-brand-900/20">
+              <p className="text-xs font-medium uppercase tracking-wide text-brand-600 dark:text-brand-300">Código do convite</p>
+              <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-slate-900 dark:text-white">{conviteResultado.token}</p>
+              <p className="mt-1 text-xs text-slate-400">Válido por 7 dias</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => copiarCodigo(conviteResultado.token || '')}>
+                <Copy className="h-4 w-4" /> Copiar código
+              </Button>
+              <Button variant="secondary" onClick={() => abrirEmailConvite(conviteResultado)}>
+                <Mail className="h-4 w-4" /> Enviar e-mail de convite
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400">
+              O convite abre o seu programa de e-mail com a mensagem pronta. Se preferir, envie o código manualmente.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="label">Nome *</label>
+              <Input value={conviteForm.nome} onChange={(e) => setConviteForm((f) => ({ ...f, nome: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">E-mail *</label>
+              <Input value={conviteForm.email} onChange={(e) => setConviteForm((f) => ({ ...f, email: e.target.value }))} type="email" />
+            </div>
+            <div>
+              <label className="label">Perfil</label>
+              <Select value={conviteForm.perfil} onChange={(e) => setConviteForm((f) => ({ ...f, perfil: e.target.value }))}>
+                {PERFIS.map((p) => <option key={p} value={p}>{PERFIL_LABEL[p]}</option>)}
+              </Select>
+            </div>
+            <div>
+              <label className="label">Cargo</label>
+              <Input value={conviteForm.cargo} onChange={(e) => setConviteForm((f) => ({ ...f, cargo: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Telefone</label>
+              <Input value={conviteForm.telefone} onChange={(e) => setConviteForm((f) => ({ ...f, telefone: e.target.value }))} />
+            </div>
+          </div>
+        )}
+        {!conviteResultado && (
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModalConvite(false)}>Cancelar</Button>
+            <Button onClick={() => void enviarConvite()} carregando={salvandoConvite}>Gerar convite</Button>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

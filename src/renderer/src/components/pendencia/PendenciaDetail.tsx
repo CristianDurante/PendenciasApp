@@ -48,6 +48,7 @@ export function PendenciaDetail(): ReactNode {
   const [aba, setAba] = useState<Aba>('geral')
   const [carregando, setCarregando] = useState(false)
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
+  const [confirmarConclusao, setConfirmarConclusao] = useState(false)
   const [novoComentario, setNovoComentario] = useState('')
   const [novoChecklist, setNovoChecklist] = useState('')
   const [historico, setHistorico] = useState<Historico[]>([])
@@ -94,7 +95,24 @@ export function PendenciaDetail(): ReactNode {
 
   const mudarStatus = (status: string): void => {
     if (!dados || status === dados.status) return
+    if (status === 'CONCLUIDA') {
+      const pendentes = (dados.checklist || []).filter((i) => !i.concluido)
+      if (pendentes.length > 0) {
+        setConfirmarConclusao(true)
+        return
+      }
+    }
     void acao(() => call('pendencia', status === 'CONCLUIDA' ? 'concluir' : 'status', { id: dados.id, status }), 'Status atualizado')
+  }
+
+  const concluir = (): void => {
+    if (!dados) return
+    const pendentes = (dados.checklist || []).filter((i) => !i.concluido)
+    if (pendentes.length > 0) {
+      setConfirmarConclusao(true)
+      return
+    }
+    void acao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
   }
 
   if (!pendencia) return null
@@ -144,7 +162,7 @@ export function PendenciaDetail(): ReactNode {
                     <RotateCcw className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button variant="success" className="!px-2.5 !py-1.5" onClick={() => void acao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')} title="Concluir">
+                  <Button variant="success" className="!px-2.5 !py-1.5" onClick={concluir} title="Concluir">
                     <CheckCircle2 className="h-4 w-4" />
                   </Button>
                 )}
@@ -242,6 +260,18 @@ export function PendenciaDetail(): ReactNode {
             )}
             {aba === 'historico' && <HistoricoSection itens={historico} />}
           </div>
+
+          <ConfirmDialog
+            aberto={confirmarConclusao}
+            aoFechar={() => setConfirmarConclusao(false)}
+            aoConfirmar={() => {
+              setConfirmarConclusao(false)
+              void acao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
+            }}
+            titulo="Concluir pendência"
+            mensagem="Existem itens de checklist não concluídos. Deseja concluir mesmo assim?"
+            confirmarTexto="Concluir mesmo assim"
+          />
 
           <ConfirmDialog
             aberto={confirmarExclusao}

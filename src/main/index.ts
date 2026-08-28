@@ -15,7 +15,7 @@ function criarJanela(): void {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    title: 'Pendify',
+    title: 'Pendencias App',
     backgroundColor: '#0f172a',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

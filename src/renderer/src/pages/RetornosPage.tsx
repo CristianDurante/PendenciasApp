@@ -22,6 +22,7 @@ const formVazio: FormRetorno = { assunto: '', clienteId: '', contato: '', dataPr
 
 export function RetornosPage(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const clientes = useCatalogoStore((s) => s.clientes)
   const usuarios = useCatalogoStore((s) => s.usuarios)
@@ -70,12 +71,14 @@ export function RetornosPage(): ReactNode {
     setModalAberto(false)
     setEditando(null)
     await carregar()
+    notificarMudanca()
   }
 
   async function mudarStatus(r: Retorno, status: string): Promise<void> {
     await call('retorno', 'status', { id: r.id, status })
     pushToast('sucesso', 'Status atualizado')
     await carregar()
+    notificarMudanca()
   }
 
   async function excluir(): Promise<void> {
@@ -86,6 +89,7 @@ export function RetornosPage(): ReactNode {
       pushToast('sucesso', 'Retorno excluído')
       setExcluindo(null)
       await carregar()
+      notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao excluir', e instanceof Error ? e.message : undefined)
     } finally {

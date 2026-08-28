@@ -15,13 +15,19 @@ export function KanbanPage(): ReactNode {
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
   const carregarDashboard = useAppStore((s) => s.carregarDashboard)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
+  const dataVersao = useAppStore((s) => s.dataVersao)
 
   useEffect(() => {
     void carregarCatalogo()
   }, [carregarCatalogo])
 
   const { itens, carregando, recarregar } = usePendencias({ porPagina: 200, pagina: 1, ordenacao: 'prazo', ordem: 'asc' } as never)
+
+  useEffect(() => {
+    if (dataVersao > 0) void recarregar()
+  }, [dataVersao, recarregar])
 
   const [arrastando, setArrastando] = useState<Pendencia | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -39,6 +45,7 @@ export function KanbanPage(): ReactNode {
       await call('pendencia', 'status', { id: p.id, status: statusNovo })
       await recarregar()
       void carregarDashboard(true)
+      notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao mover', e instanceof Error ? e.message : undefined)
     } finally {

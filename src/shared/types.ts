@@ -255,6 +255,21 @@ export interface SessaoInfo {
   expiraEm: string
 }
 
+export interface Convite {
+  id: string
+  email: string
+  nome: string
+  perfil: Perfil
+  cargo: string | null
+  telefone: string | null
+  empresaId: string | null
+  criadoEm: string
+  expiraEm: string
+  usadoEm: string | null
+  canceladoEm: string | null
+  token?: string
+}
+
 export interface ApiRequest {
   resource: string
   action: string

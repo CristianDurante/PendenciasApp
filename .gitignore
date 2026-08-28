@@ -181,6 +181,10 @@ out
 dist
 *.tsbuildinfo
 .pendify
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
 
 # Pendify test artifacts
 .pendify-test

@@ -5,11 +5,20 @@ import type { ApiContext, Perfil } from '@shared/types'
 import { PERFIS } from '@shared/constants'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
+import { addDays } from 'date-fns'
 
 const UsuarioCreateSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório').max(120),
   email: z.string().email('E-mail inválido'),
   senha: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
+  perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).default('USUARIO'),
+  cargo: z.string().max(80).optional().nullable(),
+  telefone: z.string().max(30).optional().nullable()
+})
+
+const ConviteSchema = z.object({
+  email: z.string().email('E-mail inválido'),
+  nome: z.string().min(2, 'Nome é obrigatório').max(120),
   perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).default('USUARIO'),
   cargo: z.string().max(80).optional().nullable(),
   telefone: z.string().max(30).optional().nullable()
@@ -143,4 +152,105 @@ export async function excluirUsuario(ctx: ApiContext, args: Record<string, unkno
     descricao: `Usuário "${existente.nome}" desativado`
   })
   return { ok: true }
+}
+
+function gerarCodigoConvite(): string {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const partes: string[] = []
+  for (let i = 0; i < 3; i++) {
+    let p = ''
+    for (let j = 0; j < 4; j++) p += abc[Math.floor(Math.random() * abc.length)]
+    partes.push(p)
+  }
+  return partes.join('-')
+}
+
+const conviteSelect = {
+  id: true,
+  email: true,
+  nome: true,
+  perfil: true,
+  cargo: true,
+  telefone: true,
+  empresaId: true,
+  token: true,
+  criadoEm: true,
+  expiraEm: true,
+  usadoEm: true,
+  canceladoEm: true
+} as const
+
+export async function convidarUsuario(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  requireAdminOrGestor(ctx)
+  const parsed = ConviteSchema.parse(args)
+  const db = getPrisma()
+  const email = parsed.email.trim().toLowerCase()
+
+  const existente = await db.usuario.findUnique({ where: { email } })
+  if (existente) throw new AppError('Já existe um usuário com este e-mail')
+
+  const pendente = await db.convite.findFirst({ where: { email, canceladoEm: null, usadoEm: null, expiraEm: { gt: new Date() } } })
+  if (pendente) throw new AppError('Já existe um convite pendente para este e-mail')
+
+  const convite = await db.convite.create({
+    data: {
+      email,
+      nome: parsed.nome,
+      perfil: parsed.perfil,
+      cargo: parsed.cargo || null,
+      telefone: parsed.telefone || null,
+      empresaId: ctx.empresaId,
+      criadoPorId: ctx.usuarioId,
+      token: gerarCodigoConvite(),
+      expiraEm: addDays(new Date(), 7)
+    },
+    select: conviteSelect
+  })
+
+  await registrarHistorico({
+    entidade: 'usuario',
+    entidadeId: convite.id,
+    usuarioId: ctx.usuarioId,
+    tipo: 'CRIACAO',
+    descricao: `Convite enviado para ${email} (${parsed.perfil})`
+  })
+
+  const completo = await db.convite.findUnique({ where: { id: convite.id } })
+  return deepIso(completo)
+}
+
+export async function listarConvites(ctx: ApiContext, _args: Record<string, unknown>): Promise<unknown> {
+  requireAdminOrGestor(ctx)
+  const db = getPrisma()
+  const itens = await db.convite.findMany({
+    select: conviteSelect,
+    orderBy: [{ usadoEm: 'asc' }, { criadoEm: 'desc' }],
+    take: 50
+  })
+  const pendentes = itens.filter((c) => !c.usadoEm && !c.canceladoEm && c.expiraEm > new Date())
+  const historico = itens.filter((c) => c.usadoEm || c.canceladoEm || c.expiraEm <= new Date())
+  return deepIso({ pendentes, historico })
+}
+
+export async function cancelarConvite(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  requireAdminOrGestor(ctx)
+  const db = getPrisma()
+  const id = String(args.id || '')
+  const convite = await db.convite.findUnique({ where: { id } })
+  if (!convite) throw new AppError('Convite não encontrado', 404)
+  if (convite.usadoEm) throw new AppError('Este convite já foi utilizado')
+  await db.convite.update({ where: { id }, data: { canceladoEm: new Date() } })
+  await registrarHistorico({
+    entidade: 'usuario',
+    entidadeId: id,
+    usuarioId: ctx.usuarioId,
+    tipo: 'EXCLUSAO',
+    descricao: `Convite para ${convite.email} cancelado`
+  })
+  return { ok: true }
+}
+
+export async function obterConvitePorCodigo(email: string, token: string) {
+  const db = getPrisma()
+  return db.convite.findFirst({ where: { email: email.trim().toLowerCase(), token: token.trim().toUpperCase() } })
 }

@@ -21,7 +21,6 @@ import { ProjetoDetailPage } from './pages/ProjetoDetailPage'
 import { CompromissosPage } from './pages/CompromissosPage'
 import { RetornosPage } from './pages/RetornosPage'
 import { AnotacoesPage } from './pages/AnotacoesPage'
-import { MeuDiaPage } from './pages/MeuDiaPage'
 import { MinhasAtividadesPage } from './pages/MinhasAtividadesPage'
 import { RelatoriosPage } from './pages/RelatoriosPage'
 import { HistoricoPage } from './pages/HistoricoPage'
@@ -97,7 +96,7 @@ function Shell(): ReactNode {
   if (carregandoSessao) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <p className="text-sm text-slate-400">Carregando Pendify…</p>
+        <p className="text-sm text-slate-400">Carregando Pendencias App…</p>
       </div>
     )
   }
@@ -119,7 +118,6 @@ function Shell(): ReactNode {
         <main className="min-h-0 flex-1 overflow-hidden">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/meu-dia" element={<MeuDiaPage />} />
             <Route path="/minhas-atividades" element={<MinhasAtividadesPage />} />
             <Route path="/pendencias" element={<PendenciasPage />} />
             <Route path="/kanban" element={<KanbanPage />} />

@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   app.use(express.json({ limit: '25mb' }))
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, nome: 'Pendify API', versao: '0.1.0' })
+    res.json({ ok: true, nome: 'Pendencias App API', versao: '0.1.0' })
   })
 
   app.post('/api/:resource/:action', async (req, res) => {

@@ -10,6 +10,8 @@ export function MinhasAtividadesPage(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
+  const dataVersao = useAppStore((s) => s.dataVersao)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
 
   const [dados, setDados] = useState<DadosDashboard | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -25,6 +27,10 @@ export function MinhasAtividadesPage(): ReactNode {
   useEffect(() => {
     void carregar()
   }, [carregar])
+
+  useEffect(() => {
+    if (dataVersao > 0) void carregar()
+  }, [dataVersao, carregar])
 
   const meuId = sessao?.usuario.id
 
@@ -47,6 +53,7 @@ export function MinhasAtividadesPage(): ReactNode {
       await call('pendencia', 'concluir', { id: p.id })
       pushToast('sucesso', 'Pendência concluída')
       await carregar()
+      notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao concluir', e instanceof Error ? e.message : undefined)
     } finally {
@@ -60,6 +67,7 @@ export function MinhasAtividadesPage(): ReactNode {
       await call('pendencia', 'reabrir', { id: p.id })
       pushToast('sucesso', 'Pendência reaberta')
       await carregar()
+      notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao reabrir', e instanceof Error ? e.message : undefined)
     } finally {

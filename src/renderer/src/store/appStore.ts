@@ -22,10 +22,12 @@ interface AppState {
   painelNotificacoes: boolean
   dashboard: DadosDashboard | null
   dashboardLoading: boolean
+  dataVersao: number
 
   login: (email: string, senha: string) => Promise<void>
   logout: () => Promise<void>
   carregarSessao: () => Promise<void>
+  definirSessao: (sessao: SessaoInfo) => void
   pushToast: (tipo: Toast['tipo'], titulo: string, mensagem?: string) => void
   dismissToast: (id: string) => void
   setTema: (tema: Tema) => void
@@ -36,6 +38,7 @@ interface AppState {
   setPainelNotificacoes: (v: boolean) => void
   carregarDashboard: (forcar?: boolean) => Promise<void>
   atualizarPendenciaNoState: (p: Pendencia) => void
+  notificarMudanca: () => void
 }
 
 function aplicarTema(tema: Tema): void {
@@ -57,11 +60,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   painelNotificacoes: false,
   dashboard: null,
   dashboardLoading: false,
+  dataVersao: 0,
 
   login: async (email, senha) => {
     const resultado = await call<LoginResult>('auth', 'login', { email, senha }, { semToken: true })
     setToken(resultado.sessao.token)
     set({ sessao: resultado.sessao })
+  },
+
+  definirSessao: (sessao) => {
+    setToken(sessao.token)
+    set({ sessao })
   },
 
   logout: async () => {
@@ -135,7 +144,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         : null
     }))
-  }
+    get().notificarMudanca()
+  },
+
+  notificarMudanca: () => set((s) => ({ dataVersao: s.dataVersao + 1 }))
 }))
 
 aplicarTema(useAppStore.getState().tema)
