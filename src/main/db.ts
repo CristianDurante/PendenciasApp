@@ -90,6 +90,28 @@ async function runMigration(): Promise<void> {
   }
 }
 
+async function regenerarClient(): Promise<void> {
+  const bin = resolvePrismaBin()
+  if (!bin) return
+  const schema = join(process.cwd(), 'prisma', 'schema.prisma')
+  if (!existsSync(schema)) return
+  try {
+    if (bin.endsWith('.js')) {
+      execFileSync(process.execPath, [bin, 'generate', '--schema', schema], { stdio: 'pipe' })
+    } else {
+      execFileSync(bin, ['generate', '--schema', schema], { stdio: 'pipe', shell: bin.endsWith('.cmd') })
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function clientTemModelosNecessarios(): boolean {
+  if (!prisma) return false
+  const p = prisma as unknown as Record<string, unknown>
+  return typeof p.convite === 'object' && p.convite !== null
+}
+
 export async function ensureDatabase(): Promise<void> {
   const dbPath = resolveDbPath()
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true })
@@ -98,6 +120,14 @@ export async function ensureDatabase(): Promise<void> {
   } else {
     const ok = await hasSchema()
     if (!ok) await runMigration()
+  }
+  if (!clientTemModelosNecessarios()) {
+    await regenerarClient()
+    if (prisma) {
+      await prisma.$disconnect().catch(() => undefined)
+      prisma = null
+    }
+    getPrisma()
   }
 }
 
