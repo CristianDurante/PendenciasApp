@@ -21,6 +21,7 @@ import * as lembreteService from './lembrete.service'
 import * as notificacaoService from './notificacao.service'
 import * as relatorioService from './relatorio.service'
 import * as backupService from './backup.service'
+import * as recuperacaoService from './recuperacao.service'
 import { listarHistorico, historicoGlobal } from './historico.service'
 
 export type Handler = (ctx: ApiContext, args: Record<string, unknown>) => Promise<unknown>
@@ -172,7 +173,11 @@ export const registry: Record<string, Record<string, Handler>> = {
       if (!u || !verifyPassword(atual, u.senhaHash)) throw new AppError('Senha atual incorreta')
       await db.usuario.update({ where: { id: ctx.usuarioId }, data: { senhaHash: hashPassword(nova) } })
       return { ok: true }
-    }
+    },
+    recuperarSolicitar: async (_ctx, a) => recuperacaoService.solicitarCodigo(String(a.email || '')),
+    recuperarValidar: async (_ctx, a) => recuperacaoService.validarCodigo(String(a.email || ''), String(a.codigo || '')),
+    recuperarRedefinir: async (_ctx, a) =>
+      recuperacaoService.redefinirSenha(String(a.email || ''), String(a.codigo || ''), String(a.novaSenha || ''))
   }
 }
 
@@ -199,6 +204,25 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
         String(args.codigo || ''),
         String(args.nome || ''),
         String(args.senha || '')
+      )
+      return { ok: true, data: resultado }
+    }
+    if (req.resource === 'auth' && req.action === 'recuperarSolicitar') {
+      const args = (req.args || {}) as Record<string, unknown>
+      const resultado = await recuperacaoService.solicitarCodigo(String(args.email || ''))
+      return { ok: true, data: resultado }
+    }
+    if (req.resource === 'auth' && req.action === 'recuperarValidar') {
+      const args = (req.args || {}) as Record<string, unknown>
+      const resultado = await recuperacaoService.validarCodigo(String(args.email || ''), String(args.codigo || ''))
+      return { ok: true, data: resultado }
+    }
+    if (req.resource === 'auth' && req.action === 'recuperarRedefinir') {
+      const args = (req.args || {}) as Record<string, unknown>
+      const resultado = await recuperacaoService.redefinirSenha(
+        String(args.email || ''),
+        String(args.codigo || ''),
+        String(args.novaSenha || '')
       )
       return { ok: true, data: resultado }
     }

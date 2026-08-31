@@ -53,6 +53,7 @@ export function PendenciasPage(): ReactNode {
   const [selecionadas, setSelecionadas] = useState<string[]>([])
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
+  const [processando, setProcessando] = useState(false)
 
   const filtroPrazoInicial = params.get('prazo')
   const prazoHoje = filtroPrazoInicial === 'hoje'
@@ -106,28 +107,42 @@ export function PendenciasPage(): ReactNode {
   }
 
   async function concluirEmMassa(): Promise<void> {
-    for (const id of selecionadas) {
-      await call('pendencia', 'concluir', { id }).catch(() => null)
+    if (processando || selecionadas.length === 0) return
+    setProcessando(true)
+    const ids = [...selecionadas]
+    try {
+      for (const id of ids) {
+        await call('pendencia', 'concluir', { id }).catch(() => null)
+      }
+      setSelecionadas([])
+      await recarregar()
+      void carregarDashboard(true)
+      notificarMudanca()
+      pushToast('sucesso', 'Pendências concluídas', `${ids.length} pendência(s) concluída(s).`)
+    } finally {
+      setProcessando(false)
     }
-    setSelecionadas([])
-    await recarregar()
-    void carregarDashboard(true)
-    notificarMudanca()
-    pushToast('sucesso', 'Pendências concluídas', `${selecionadas.length} pendência(s) concluída(s).`)
   }
 
   async function excluirEmMassa(): Promise<void> {
+    if (processando || selecionadas.length === 0) return
+    setProcessando(true)
     setExcluindo(true)
-    for (const id of selecionadas) {
-      await call('pendencia', 'excluir', { id }).catch(() => null)
+    const ids = [...selecionadas]
+    try {
+      for (const id of ids) {
+        await call('pendencia', 'excluir', { id }).catch(() => null)
+      }
+      setConfirmarExclusao(false)
+      setSelecionadas([])
+      await recarregar()
+      void carregarDashboard(true)
+      notificarMudanca()
+      pushToast('sucesso', 'Pendências excluídas')
+    } finally {
+      setExcluindo(false)
+      setProcessando(false)
     }
-    setExcluindo(false)
-    setConfirmarExclusao(false)
-    setSelecionadas([])
-    await recarregar()
-    void carregarDashboard(true)
-    notificarMudanca()
-    pushToast('sucesso', 'Pendências excluídas')
   }
 
   function limparFiltros(): void {
@@ -172,10 +187,10 @@ export function PendenciasPage(): ReactNode {
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               {selecionadas.length} selecionada(s)
             </span>
-            <button onClick={() => void concluirEmMassa()} className="btn-secondary !py-1.5 !text-xs">
+            <button onClick={() => void concluirEmMassa()} disabled={processando} className="btn-secondary !py-1.5 !text-xs">
               <CheckCircle2 className="h-4 w-4" /> Concluir
             </button>
-            <button onClick={() => setConfirmarExclusao(true)} className="btn-danger !py-1.5 !text-xs">
+            <button onClick={() => setConfirmarExclusao(true)} disabled={processando} className="btn-danger !py-1.5 !text-xs">
               <Trash2 className="h-4 w-4" /> Excluir
             </button>
           </div>

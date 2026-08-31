@@ -366,3 +366,16 @@ model Convite {
 
   @@map("convites")
 }
+
+model CodigoRecuperacao {
+  id          String    @id @default(cuid())
+  email       String
+  codigoHash  String // hash bcrypt do código de segurança
+  expiraEm    DateTime
+  usadoEm     DateTime?
+  tentativas  Int       @default(0)
+  criadoEm    DateTime  @default(now())
+
+  @@index([email])
+  @@map("codigos_recuperacao")
+}

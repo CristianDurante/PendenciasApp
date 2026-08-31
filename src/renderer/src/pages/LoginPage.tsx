@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, ListTodo, Lock, Mail, TicketCheck, User, KeyRound } from 'lucide-react'
+import { Eye, EyeOff, ListTodo, Lock, Mail, TicketCheck, User, KeyRound, ArrowLeft, ShieldCheck } from 'lucide-react'
 import type { LoginResult } from '@shared/types'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
 import { cn } from '../lib/format'
 
-type Modo = 'entrar' | 'convite'
+type Modo = 'entrar' | 'convite' | 'recuperar'
+type PassoRecuperacao = 'email' | 'codigo' | 'senha' | 'feito'
 
 export function LoginPage(): ReactNode {
   const login = useAppStore((s) => s.login)
@@ -25,6 +26,15 @@ export function LoginPage(): ReactNode {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [info, setInfo] = useState('')
+
+  const [passoRecuperacao, setPassoRecuperacao] = useState<PassoRecuperacao>('email')
+  const [emailRecuperacao, setEmailRecuperacao] = useState('')
+  const [codigoRecuperacao, setCodigoRecuperacao] = useState('')
+  const [senhaNova, setSenhaNova] = useState('')
+  const [senhaConfirmar, setSenhaConfirmar] = useState('')
+  const [recuperacaoCarregando, setRecuperacaoCarregando] = useState(false)
+  const [recuperacaoErro, setRecuperacaoErro] = useState('')
+  const [recuperacaoInfo, setRecuperacaoInfo] = useState('')
 
   async function entrar(e: React.FormEvent): Promise<void> {
     e.preventDefault()
@@ -78,10 +88,89 @@ export function LoginPage(): ReactNode {
     }
   }
 
+  async function solicitarCodigoRecuperacao(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!emailRecuperacao.trim()) {
+      setRecuperacaoErro('Informe seu e-mail cadastrado.')
+      return
+    }
+    setRecuperacaoCarregando(true)
+    setRecuperacaoErro('')
+    setRecuperacaoInfo('')
+    try {
+      const r = await call<{ mensagem?: string; codigo?: string }>('auth', 'recuperarSolicitar', { email: emailRecuperacao.trim() }, { semToken: true })
+      setRecuperacaoInfo(r.mensagem || 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.')
+      if (r.codigo) setRecuperacaoInfo(`[Ambiente de desenvolvimento] Código recebido: ${r.codigo}`)
+      setPassoRecuperacao('codigo')
+    } catch (err) {
+      setRecuperacaoErro(err instanceof Error ? err.message : 'Falha ao solicitar código.')
+    } finally {
+      setRecuperacaoCarregando(false)
+    }
+  }
+
+  async function validarCodigoRecuperacao(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!codigoRecuperacao.trim()) {
+      setRecuperacaoErro('Informe o código recebido.')
+      return
+    }
+    setRecuperacaoCarregando(true)
+    setRecuperacaoErro('')
+    setRecuperacaoInfo('')
+    try {
+      await call('auth', 'recuperarValidar', { email: emailRecuperacao.trim(), codigo: codigoRecuperacao.trim() }, { semToken: true })
+      setPassoRecuperacao('senha')
+    } catch (err) {
+      setRecuperacaoErro(err instanceof Error ? err.message : 'Código inválido ou expirado.')
+    } finally {
+      setRecuperacaoCarregando(false)
+    }
+  }
+
+  async function redefinirSenhaRecuperacao(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!senhaNova || !senhaConfirmar) {
+      setRecuperacaoErro('Informe e confirme a nova senha.')
+      return
+    }
+    if (senhaNova.length < 6) {
+      setRecuperacaoErro('A senha deve ter no mínimo 6 caracteres.')
+      return
+    }
+    if (senhaNova !== senhaConfirmar) {
+      setRecuperacaoErro('As senhas não conferem.')
+      return
+    }
+    setRecuperacaoCarregando(true)
+    setRecuperacaoErro('')
+    setRecuperacaoInfo('')
+    try {
+      await call('auth', 'recuperarRedefinir', {
+        email: emailRecuperacao.trim(),
+        codigo: codigoRecuperacao.trim(),
+        novaSenha: senhaNova
+      }, { semToken: true })
+      setSenhaNova('')
+      setSenhaConfirmar('')
+      setPassoRecuperacao('feito')
+    } catch (err) {
+      setRecuperacaoErro(err instanceof Error ? err.message : 'Falha ao redefinir a senha.')
+    } finally {
+      setRecuperacaoCarregando(false)
+    }
+  }
+
   function trocarModo(m: Modo): void {
     setModo(m)
     setErro('')
     setInfo('')
+    setRecuperacaoErro('')
+    setRecuperacaoInfo('')
+    setPassoRecuperacao('email')
+    setCodigoRecuperacao('')
+    setSenhaNova('')
+    setSenhaConfirmar('')
   }
 
   return (
@@ -98,30 +187,32 @@ export function LoginPage(): ReactNode {
         </div>
 
         <div className="card !p-6">
-          <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            <button
-              type="button"
-              onClick={() => trocarModo('entrar')}
-              className={cn(
-                'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
-                modo === 'entrar' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
-              )}
-            >
-              <Lock className="h-4 w-4" /> Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => trocarModo('convite')}
-              className={cn(
-                'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
-                modo === 'convite' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
-              )}
-            >
-              <TicketCheck className="h-4 w-4" /> Tenho convite
-            </button>
-          </div>
+          {modo !== 'recuperar' && (
+            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => trocarModo('entrar')}
+                className={cn(
+                  'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
+                  modo === 'entrar' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
+                )}
+              >
+                <Lock className="h-4 w-4" /> Entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => trocarModo('convite')}
+                className={cn(
+                  'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
+                  modo === 'convite' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
+                )}
+              >
+                <TicketCheck className="h-4 w-4" /> Tenho convite
+              </button>
+            </div>
+          )}
 
-          {modo === 'entrar' ? (
+          {modo === 'entrar' && (
             <form onSubmit={(e) => void entrar(e)}>
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <ListTodo className="h-4 w-4 text-brand-600 dark:text-brand-400" />
@@ -160,13 +251,23 @@ export function LoginPage(): ReactNode {
                 </button>
               </div>
 
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => trocarModo('recuperar')}
+                  className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
+
               {erro && (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
                   {erro}
                 </div>
               )}
               {info && (
-                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+                <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
                   {info}
                 </div>
               )}
@@ -175,7 +276,9 @@ export function LoginPage(): ReactNode {
                 {carregando ? 'Entrando…' : 'Entrar'}
               </button>
             </form>
-          ) : (
+          )}
+
+          {modo === 'convite' && (
             <form onSubmit={(e) => void aceitarConvite(e)}>
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                 <TicketCheck className="h-4 w-4 text-brand-600 dark:text-brand-400" />
@@ -245,6 +348,150 @@ export function LoginPage(): ReactNode {
                 {carregando ? 'Criando acesso…' : 'Criar acesso e entrar'}
               </button>
             </form>
+          )}
+
+          {modo === 'recuperar' && (
+            <div>
+              {passoRecuperacao === 'email' && (
+                <form onSubmit={(e) => void solicitarCodigoRecuperacao(e)}>
+                  <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <ShieldCheck className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+                    Recuperar senha
+                  </div>
+                  <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+                    Informe o e-mail cadastrado. Enviaremos um código de segurança para a redefinição da senha.
+                  </p>
+                  <label className="label">E-mail cadastrado</label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      value={emailRecuperacao}
+                      onChange={(e) => setEmailRecuperacao(e.target.value)}
+                      placeholder="voce@empresa.com"
+                      autoFocus
+                      className="input !pl-9"
+                    />
+                  </div>
+                  {recuperacaoErro && (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                      {recuperacaoErro}
+                    </div>
+                  )}
+                  <button type="submit" disabled={recuperacaoCarregando} className="btn-primary mt-5 w-full">
+                    {recuperacaoCarregando ? 'Enviando…' : 'Enviar código'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => trocarModo('entrar')}
+                    className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  >
+                    <ArrowLeft className="h-3 w-3" /> Voltar ao login
+                  </button>
+                </form>
+              )}
+
+              {passoRecuperacao === 'codigo' && (
+                <form onSubmit={(e) => void validarCodigoRecuperacao(e)}>
+                  <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <ShieldCheck className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+                    Informe o código
+                  </div>
+                  {recuperacaoInfo && (
+                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+                      {recuperacaoInfo}
+                    </div>
+                  )}
+                  <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+                    Digite o código de segurança enviado para <strong>{emailRecuperacao}</strong>.
+                  </p>
+                  <label className="label">Código de segurança</label>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={codigoRecuperacao}
+                      onChange={(e) => setCodigoRecuperacao(e.target.value)}
+                      placeholder="000000"
+                      inputMode="numeric"
+                      maxLength={6}
+                      autoFocus
+                      className="input !pl-9 tracking-[0.3em]"
+                    />
+                  </div>
+                  {recuperacaoErro && (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                      {recuperacaoErro}
+                    </div>
+                  )}
+                  <button type="submit" disabled={recuperacaoCarregando} className="btn-primary mt-5 w-full">
+                    {recuperacaoCarregando ? 'Validando…' : 'Validar código'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPassoRecuperacao('email')}
+                    className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  >
+                    <ArrowLeft className="h-3 w-3" /> Reenviar código
+                  </button>
+                </form>
+              )}
+
+              {passoRecuperacao === 'senha' && (
+                <form onSubmit={(e) => void redefinirSenhaRecuperacao(e)}>
+                  <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    <ShieldCheck className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+                    Definir nova senha
+                  </div>
+                  <label className="label">Nova senha</label>
+                  <input
+                    type="password"
+                    value={senhaNova}
+                    onChange={(e) => setSenhaNova(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    autoFocus
+                    className="input"
+                  />
+                  <label className="label mt-4">Confirmar nova senha</label>
+                  <input
+                    type="password"
+                    value={senhaConfirmar}
+                    onChange={(e) => setSenhaConfirmar(e.target.value)}
+                    placeholder="Repita a nova senha"
+                    className="input"
+                  />
+                  {recuperacaoErro && (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                      {recuperacaoErro}
+                    </div>
+                  )}
+                  <button type="submit" disabled={recuperacaoCarregando} className="btn-primary mt-5 w-full">
+                    {recuperacaoCarregando ? 'Salvando…' : 'Salvar nova senha'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPassoRecuperacao('codigo')}
+                    className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                  >
+                    <ArrowLeft className="h-3 w-3" /> Voltar
+                  </button>
+                </form>
+              )}
+
+              {passoRecuperacao === 'feito' && (
+                <div className="text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30">
+                    <ShieldCheck className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Senha alterada com sucesso</h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Sua senha foi atualizada. Você já pode entrar com a nova senha.
+                  </p>
+                  <button onClick={() => trocarModo('entrar')} className="btn-primary mt-5 w-full">
+                    Voltar ao login
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

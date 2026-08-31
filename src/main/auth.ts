@@ -22,6 +22,13 @@ export function verifyPassword(senha: string, hash: string): boolean {
   return bcrypt.compareSync(senha, hash)
 }
 
+export function validarRequisitosSenha(senha: string): string | null {
+  if (!senha) return 'Informe uma nova senha'
+  if (senha.length < 6) return 'A senha deve ter no mínimo 6 caracteres'
+  if (senha.length > 72) return 'A senha é muito longa (máximo 72 caracteres)'
+  return null
+}
+
 export function gerarToken(): string {
   return randomUUID() + randomUUID().replace(/-/g, '')
 }

@@ -8,10 +8,12 @@ import { cn } from '../../lib/format'
 
 export function TagPicker({
   selecionadas,
-  aoMudar
+  aoMudar,
+  desabilitado = false
 }: {
   selecionadas: string[]
   aoMudar: (ids: string[]) => void
+  desabilitado?: boolean
 }): ReactNode {
   const tags = useCatalogoStore((s) => s.tags)
   const recarregar = useCatalogoStore((s) => s.recarregar)
@@ -30,11 +32,13 @@ export function TagPicker({
   }, [])
 
   const toggle = (id: string): void => {
+    if (desabilitado) return
     if (selecionadas.includes(id)) aoMudar(selecionadas.filter((x) => x !== id))
     else aoMudar([...selecionadas, id])
   }
 
   const criarTag = async (): Promise<void> => {
+    if (desabilitado) return
     const nome = novaTag.trim()
     if (!nome) return
     try {
@@ -64,7 +68,7 @@ export function TagPicker({
               style={{ backgroundColor: tag.cor + '1f', color: tag.cor }}
             >
               {tag.nome}
-              <button onClick={() => aoMudar(selecionadas.filter((x) => x !== id))}>
+              <button disabled={desabilitado} onClick={() => aoMudar(selecionadas.filter((x) => x !== id))}>
                 <X className="h-3 w-3 opacity-60 hover:opacity-100" />
               </button>
             </span>
@@ -73,7 +77,8 @@ export function TagPicker({
         <button
           type="button"
           onClick={() => setAberto((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500 transition hover:border-brand-400 hover:text-brand-500 dark:border-slate-600"
+          disabled={desabilitado}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500 transition hover:border-brand-400 hover:text-brand-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600"
         >
           <Plus className="h-3 w-3" /> Adicionar tag
         </button>

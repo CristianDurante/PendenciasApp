@@ -32,10 +32,11 @@ export function getPrisma(): PrismaClient {
   return prisma
 }
 
-function hasSchema(): Promise<boolean> {
+function temTabela(nome: string): Promise<boolean> {
   const db = getPrisma()
   const result = db.$queryRawUnsafe<Array<{ name: string }>>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='pendencias'"
+    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+    nome
   )
   return result.then((rows) => rows.length > 0).catch(() => false)
 }
@@ -118,8 +119,13 @@ export async function ensureDatabase(): Promise<void> {
   if (!existsSync(dbPath)) {
     await runMigration()
   } else {
-    const ok = await hasSchema()
-    if (!ok) await runMigration()
+    const ok = await temTabela('pendencias')
+    if (ok) {
+      // Banco existente: aplica migrações pendentes (ex.: codigos_recuperacao)
+      if (!(await temTabela('codigos_recuperacao'))) await runMigration()
+    } else {
+      await runMigration()
+    }
   }
   if (!clientTemModelosNecessarios()) {
     await regenerarClient()

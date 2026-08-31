@@ -144,7 +144,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         : null
     }))
-    get().notificarMudanca()
   },
 
   notificarMudanca: () => set((s) => ({ dataVersao: s.dataVersao + 1 }))

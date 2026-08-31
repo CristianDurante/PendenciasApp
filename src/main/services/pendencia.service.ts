@@ -15,7 +15,7 @@ import {
 } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { criarNotificacao, notificacaoDesktop } from './notificacao.service'
-import { addDays, addMonths, addYears, parseISO } from 'date-fns'
+import { parseISO } from 'date-fns'
 
 export const pendenciaInclude = {
   criador: { select: { id: true, nome: true, avatar: true } },
@@ -372,8 +372,16 @@ export async function concluirPendencia(ctx: ApiContext, args: Record<string, un
   const id = String(args.id || '')
   const p = await db.pendencia.findUnique({ where: { id } })
   if (!p) throw new AppError('Pendência não encontrada', 404)
-  if (p.status !== 'CONCLUIDA') {
-    await db.pendencia.update({ where: { id }, data: { status: 'CONCLUIDA', concluidaEm: new Date() } })
+
+  // Guarda idempotente: a transição só acontece se ainda não estiver CONCLUIDA.
+  // UPDATE único e atômico (com cláusula WHERE) impede que requisições
+  // concorrentes dupliquem efeitos colaterais ou registros.
+  const resultado = await db.pendencia.updateMany({
+    where: { id, status: { not: 'CONCLUIDA' } },
+    data: { status: 'CONCLUIDA', concluidaEm: new Date() }
+  })
+
+  if (resultado.count > 0) {
     await registrarHistorico({
       entidade: 'pendencia',
       entidadeId: id,
@@ -399,54 +407,21 @@ export async function concluirPendencia(ctx: ApiContext, args: Record<string, un
         relacionadoId: id
       })
     }
-    const rec = safeJsonParse<{ tipo: string; intervalo: number; ativo: boolean } | null>(p.recorrencia, null)
+    // Recorrência: NÃO é criado um novo registro ao concluir. A pendência
+    // permanece sendo um único registro; apenas o status é alterado. A
+    // configuração de recorrência é preservada e isso é registrado no histórico.
+    const rec = safeJsonParse<{ tipo: string; ativo: boolean } | null>(p.recorrencia, null)
     if (rec && rec.ativo && rec.tipo) {
-      const base = p.prazo ? new Date(p.prazo) : new Date()
-      let prox = base
-      if (rec.tipo === 'diaria') prox = addDays(base, rec.intervalo || 1)
-      else if (rec.tipo === 'semanal') prox = addDays(base, 7 * (rec.intervalo || 1))
-      else if (rec.tipo === 'mensal') prox = addMonths(base, rec.intervalo || 1)
-      else if (rec.tipo === 'trimestral') prox = addMonths(base, 3 * (rec.intervalo || 1))
-      else if (rec.tipo === 'anual') prox = addYears(base, rec.intervalo || 1)
-      await db.pendencia.create({
-        data: {
-          titulo: p.titulo,
-          descricao: p.descricao,
-          clienteId: p.clienteId,
-          projetoId: p.projetoId,
-          sistema: p.sistema,
-          responsavelId: p.responsavelId,
-          criadorId: p.criadorId,
-          prazo: prox,
-          horario: p.horario,
-          prioridade: p.prioridade,
-          categoriaId: p.categoriaId,
-          departamento: p.departamento,
-          status: 'A_FAZER',
-          observacoes: p.observacoes,
-          recorrencia: p.recorrencia
-        }
+      await registrarHistorico({
+        entidade: 'pendencia',
+        entidadeId: id,
+        usuarioId: ctx.usuarioId,
+        tipo: 'RECORRENCIA',
+        descricao: 'Pendência recorrente concluída (nenhuma nova ocorrência foi gerada automaticamente)'
       })
-      const tags = await db.pendenciaTag.findMany({ where: { pendenciaId: id } })
-      const proxima = await db.pendencia.findFirst({ where: { prazo: prox, titulo: p.titulo, status: 'A_FAZER' }, orderBy: { criadoEm: 'desc' } })
-      if (proxima && tags.length) {
-        await db.pendenciaTag.createMany({ data: tags.map((t) => ({ pendenciaId: proxima.id, tagId: t.tagId })) })
-      }
-      const chk = await db.checklistItem.findMany({ where: { pendenciaId: id } })
-      if (proxima && chk.length) {
-        await db.checklistItem.createMany({ data: chk.map((c) => ({ pendenciaId: proxima.id, descricao: c.descricao })) })
-      }
-      if (proxima) {
-        await registrarHistorico({
-          entidade: 'pendencia',
-          entidadeId: proxima.id,
-          usuarioId: ctx.usuarioId,
-          tipo: 'RECORRENCIA',
-          descricao: `Próxima ocorrência gerada automaticamente para ${prox.toLocaleDateString('pt-BR')}`
-        })
-      }
     }
   }
+
   const completa = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
   return serializarPendencia(completa as never)
 }
@@ -457,6 +432,11 @@ export async function reabrirPendencia(ctx: ApiContext, args: Record<string, unk
   const p = await db.pendencia.findUnique({ where: { id } })
   if (!p) throw new AppError('Pendência não encontrada', 404)
   const novoStatus: PendenciaStatus = (p.status === 'CONCLUIDA' ? 'EM_ANDAMENTO' : p.status) as PendenciaStatus
+  // Idempotente: se já está aberta, não reescreve nem gera histórico em duplicidade.
+  if (p.status === novoStatus) {
+    const completaAtual = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
+    return serializarPendencia(completaAtual as never)
+  }
   await db.pendencia.update({ where: { id }, data: { status: novoStatus, concluidaEm: null } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -477,6 +457,11 @@ export async function alterarStatusPendencia(ctx: ApiContext, args: Record<strin
   const db = getPrisma()
   const p = await db.pendencia.findUnique({ where: { id } })
   if (!p) throw new AppError('Pendência não encontrada', 404)
+  // Idempotente: já está no status desejado, não gera novo histórico nem gravação.
+  if (p.status === status) {
+    const completaAtual = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
+    return serializarPendencia(completaAtual as never)
+  }
   const data: Prisma.PendenciaUpdateInput = { status: status as PendenciaStatus, concluidaEm: null }
   if (status === 'CANCELADA' && p.status !== 'CANCELADA') {
     data.concluidaEm = null

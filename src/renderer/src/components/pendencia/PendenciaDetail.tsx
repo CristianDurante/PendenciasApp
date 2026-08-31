@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   CheckSquare,
   MessageSquare,
@@ -39,10 +39,14 @@ export function PendenciaDetail(): ReactNode {
   const fechar = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
   const atualizarNoState = useAppStore((s) => s.atualizarPendenciaNoState)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarDashboard = useAppStore((s) => s.carregarDashboard)
   const usuarios = useCatalogoStore((s) => s.usuarios)
   const recarregarCatalogo = useCatalogoStore((s) => s.recarregar)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
+
+  // Usa somente o ID (estável) para evitar loop de re-renderização.
+  const pendenciaId = pendencia?.id ?? null
 
   const [dados, setDados] = useState<Pendencia | null>(null)
   const [aba, setAba] = useState<Aba>('geral')
@@ -52,49 +56,71 @@ export function PendenciaDetail(): ReactNode {
   const [novoComentario, setNovoComentario] = useState('')
   const [novoChecklist, setNovoChecklist] = useState('')
   const [historico, setHistorico] = useState<Historico[]>([])
+  // Guarda contra múltiplos cliques/submissões simultâneas.
+  const [operacao, setOperacao] = useState(false)
+  const operacaoRef = useRef(false)
+  const idAtualRef = useRef<string | null>(null)
 
   const carregar = useCallback(async (): Promise<void> => {
-    if (!pendencia) return
+    if (!pendenciaId) {
+      setDados(null)
+      setHistorico([])
+      return
+    }
+    idAtualRef.current = pendenciaId
     setCarregando(true)
     try {
-      const p = await call<Pendencia>('pendencia', 'obter', { id: pendencia.id })
+      const p = await call<Pendencia>('pendencia', 'obter', { id: pendenciaId })
+      if (idAtualRef.current !== pendenciaId) return
       setDados(p)
-      atualizarNoState(p)
       const h = await call<Historico[]>('historico', 'listar', { entidade: 'pendencia', entidadeId: p.id })
+      if (idAtualRef.current !== pendenciaId) return
       setHistorico(h)
     } catch {
-      // pendência pode ter sido excluída
+      if (idAtualRef.current === pendenciaId) setDados(null)
     } finally {
-      setCarregando(false)
+      if (idAtualRef.current === pendenciaId) setCarregando(false)
     }
-  }, [pendencia, atualizarNoState])
+  }, [pendenciaId])
 
   useEffect(() => {
-    if (pendencia) {
-      void carregar()
-      setAba('geral')
-    } else {
-      setDados(null)
-    }
-  }, [pendencia, carregar])
+    void carregar()
+    setAba('geral')
+  }, [carregar])
 
-  const acao = async (fn: () => Promise<unknown>, msgSucesso: string): Promise<void> => {
-    try {
-      const resultado = await fn()
-      pushToast('sucesso', msgSucesso)
-      if (resultado && typeof resultado === 'object' && 'id' in (resultado as Pendencia)) {
-        atualizarNoState(resultado as Pendencia)
+  const executarAcao = useCallback(
+    async (fn: () => Promise<unknown>, msgSucesso?: string): Promise<void> => {
+      if (operacaoRef.current) return
+      operacaoRef.current = true
+      setOperacao(true)
+      try {
+        const resultado = await fn()
+        if (msgSucesso) pushToast('sucesso', msgSucesso)
+        if (resultado && typeof resultado === 'object' && 'id' in (resultado as Pendencia)) {
+          atualizarNoState(resultado as Pendencia)
+        }
+        await carregar()
+        notificarMudanca()
+        void carregarDashboard(true)
+        void recarregarCatalogo()
+      } catch (e) {
+        pushToast('erro', 'Erro na operação', (e as Error).message)
+      } finally {
+        operacaoRef.current = false
+        setOperacao(false)
       }
-      await carregar()
-      void carregarDashboard(true)
-      void recarregarCatalogo()
-    } catch (e) {
-      pushToast('erro', 'Erro na operação', (e as Error).message)
-    }
-  }
+    },
+    [carregar, atualizarNoState, notificarMudanca, pushToast, carregarDashboard, recarregarCatalogo]
+  )
+
+  const atualizarAposAcao = useCallback(async (): Promise<void> => {
+    await carregar()
+    notificarMudanca()
+    void carregarDashboard(true)
+  }, [carregar, notificarMudanca, carregarDashboard])
 
   const mudarStatus = (status: string): void => {
-    if (!dados || status === dados.status) return
+    if (!dados || status === dados.status || operacaoRef.current) return
     if (status === 'CONCLUIDA') {
       const pendentes = (dados.checklist || []).filter((i) => !i.concluido)
       if (pendentes.length > 0) {
@@ -102,17 +128,67 @@ export function PendenciaDetail(): ReactNode {
         return
       }
     }
-    void acao(() => call('pendencia', status === 'CONCLUIDA' ? 'concluir' : 'status', { id: dados.id, status }), 'Status atualizado')
+    void executarAcao(() => call('pendencia', status === 'CONCLUIDA' ? 'concluir' : 'status', { id: dados.id, status }), 'Status atualizado')
   }
 
   const concluir = (): void => {
-    if (!dados) return
+    if (!dados || operacaoRef.current) return
     const pendentes = (dados.checklist || []).filter((i) => !i.concluido)
     if (pendentes.length > 0) {
       setConfirmarConclusao(true)
       return
     }
-    void acao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
+    void executarAcao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
+  }
+
+  const confirmarConclusaoHandler = (): void => {
+    if (!dados) return
+    setConfirmarConclusao(false)
+    void executarAcao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
+  }
+
+  const confirmarExclusaoHandler = (): void => {
+    if (!dados) return
+    setConfirmarExclusao(false)
+    void executarAcao(async () => {
+      await call('pendencia', 'excluir', { id: dados.id })
+      fechar(null)
+      return { ok: true }
+    }, 'Pendência excluída')
+  }
+
+  const adicionarChecklist = (descricao: string): void => {
+    if (!dados || operacaoRef.current) return
+    void executarAcao(async () => {
+      await call('pendencia', 'checklistAdicionar', { pendenciaId: dados.id, descricao })
+      return { ok: true }
+    }, 'Item adicionado ao checklist')
+  }
+
+  const alternarChecklist = (itemId: string): void => {
+    if (!dados || operacaoRef.current) return
+    void executarAcao(async () => {
+      await call('pendencia', 'checklistToggle', { itemId })
+      return { ok: true }
+    })
+  }
+
+  const removerChecklist = (itemId: string): void => {
+    if (!dados || operacaoRef.current) return
+    void executarAcao(async () => {
+      await call('pendencia', 'checklistRemover', { itemId })
+      return { ok: true }
+    }, 'Item removido do checklist')
+  }
+
+  const enviarComentario = (): void => {
+    if (!dados || operacaoRef.current || !novoComentario.trim()) return
+    const conteudo = novoComentario.trim()
+    void executarAcao(async () => {
+      await call('pendencia', 'comentarioAdicionar', { pendenciaId: dados.id, conteudo })
+      setNovoComentario('')
+      return { ok: true }
+    }, 'Comentário adicionado')
   }
 
   if (!pendencia) return null
@@ -146,6 +222,7 @@ export function PendenciaDetail(): ReactNode {
                 <Select
                   className="!w-auto !py-1.5 text-xs"
                   value={dados.status}
+                  disabled={operacao}
                   onChange={(e) => mudarStatus(e.target.value)}
                 >
                   {PENDENCIA_STATUS.map((s) => (
@@ -154,22 +231,22 @@ export function PendenciaDetail(): ReactNode {
                     </option>
                   ))}
                 </Select>
-                <Button variant="secondary" className="!px-2.5 !py-1.5" onClick={() => abrirNovaPendencia({ pendencia: dados })} title="Editar">
+                <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => abrirNovaPendencia({ pendencia: dados })} title="Editar">
                   <Pencil className="h-4 w-4" />
                 </Button>
                 {dados.status === 'CONCLUIDA' ? (
-                  <Button variant="secondary" className="!px-2.5 !py-1.5" onClick={() => void acao(() => call('pendencia', 'reabrir', { id: dados.id }), 'Pendência reaberta')} title="Reabrir">
+                  <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'reabrir', { id: dados.id }), 'Pendência reaberta')} title="Reabrir">
                     <RotateCcw className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button variant="success" className="!px-2.5 !py-1.5" onClick={concluir} title="Concluir">
+                  <Button variant="success" className="!px-2.5 !py-1.5" disabled={operacao} onClick={concluir} title="Concluir">
                     <CheckCircle2 className="h-4 w-4" />
                   </Button>
                 )}
-                <Button variant="secondary" className="!px-2.5 !py-1.5" onClick={() => void acao(() => call('pendencia', 'duplicar', { id: dados.id }), 'Pendência duplicada')} title="Duplicar">
+                <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'duplicar', { id: dados.id }), 'Pendência duplicada')} title="Duplicar">
                   <Copy className="h-4 w-4" />
                 </Button>
-                <Button variant="danger" className="!px-2.5 !py-1.5" onClick={() => setConfirmarExclusao(true)} title="Excluir">
+                <Button variant="danger" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => setConfirmarExclusao(true)} title="Excluir">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -211,8 +288,9 @@ export function PendenciaDetail(): ReactNode {
             {aba === 'geral' && (
               <VisaoGeral
                 dados={dados}
+                operacao={operacao}
                 aoSalvarTags={(tags) =>
-                  void acao(
+                  void executarAcao(
                     () => call('pendencia', 'atualizar', { id: dados.id, tags }),
                     'Tags atualizadas'
                   )
@@ -222,18 +300,10 @@ export function PendenciaDetail(): ReactNode {
             {aba === 'checklist' && (
               <ChecklistSection
                 itens={dados.checklist || []}
-                aoAdicionar={async (descricao) => {
-                  await call('pendencia', 'checklistAdicionar', { pendenciaId: dados.id, descricao })
-                  await carregar()
-                }}
-                aoToggle={async (itemId) => {
-                  await call('pendencia', 'checklistToggle', { itemId })
-                  await carregar()
-                }}
-                aoRemover={async (itemId) => {
-                  await call('pendencia', 'checklistRemover', { itemId })
-                  await carregar()
-                }}
+                operacao={operacao}
+                aoAdicionar={adicionarChecklist}
+                aoToggle={alternarChecklist}
+                aoRemover={removerChecklist}
                 novoChecklist={novoChecklist}
                 setNovoChecklist={setNovoChecklist}
               />
@@ -242,20 +312,18 @@ export function PendenciaDetail(): ReactNode {
               <ComentariosSection
                 comentarios={dados.comentarios || []}
                 usuarios={usuarios}
+                operacao={operacao}
                 novoComentario={novoComentario}
                 setNovoComentario={setNovoComentario}
-                aoEnviar={async () => {
-                  await call('pendencia', 'comentarioAdicionar', { pendenciaId: dados.id, conteudo: novoComentario })
-                  setNovoComentario('')
-                  await carregar()
-                }}
+                aoEnviar={enviarComentario}
               />
             )}
             {aba === 'anexos' && (
               <AnexosSection
                 pendenciaId={dados.id}
                 anexos={dados.anexos || []}
-                aoAtualizar={carregar}
+                operacao={operacao}
+                aoAtualizar={atualizarAposAcao}
               />
             )}
             {aba === 'historico' && <HistoricoSection itens={historico} />}
@@ -264,10 +332,7 @@ export function PendenciaDetail(): ReactNode {
           <ConfirmDialog
             aberto={confirmarConclusao}
             aoFechar={() => setConfirmarConclusao(false)}
-            aoConfirmar={() => {
-              setConfirmarConclusao(false)
-              void acao(() => call('pendencia', 'concluir', { id: dados.id }), 'Pendência concluída')
-            }}
+            aoConfirmar={confirmarConclusaoHandler}
             titulo="Concluir pendência"
             mensagem="Existem itens de checklist não concluídos. Deseja concluir mesmo assim?"
             confirmarTexto="Concluir mesmo assim"
@@ -276,14 +341,7 @@ export function PendenciaDetail(): ReactNode {
           <ConfirmDialog
             aberto={confirmarExclusao}
             aoFechar={() => setConfirmarExclusao(false)}
-            aoConfirmar={() => {
-              setConfirmarExclusao(false)
-              void acao(async () => {
-                await call('pendencia', 'excluir', { id: dados.id })
-                fechar(null)
-                return { ok: true }
-              }, 'Pendência excluída')
-            }}
+            aoConfirmar={confirmarExclusaoHandler}
             titulo="Excluir pendência"
             mensagem={`Deseja realmente excluir "${dados.titulo}"? Esta ação não pode ser desfeita.`}
             confirmarTexto="Excluir"
@@ -297,7 +355,15 @@ export function PendenciaDetail(): ReactNode {
   )
 }
 
-function VisaoGeral({ dados, aoSalvarTags }: { dados: Pendencia; aoSalvarTags: (tags: string[]) => void }): ReactNode {
+function VisaoGeral({
+  dados,
+  operacao,
+  aoSalvarTags
+}: {
+  dados: Pendencia
+  operacao: boolean
+  aoSalvarTags: (tags: string[]) => void
+}): ReactNode {
   const [tags, setTags] = useState<string[]>((dados.tags || []).map((t) => t.tagId))
   useEffect(() => {
     setTags((dados.tags || []).map((t) => t.tagId))
@@ -345,7 +411,7 @@ function VisaoGeral({ dados, aoSalvarTags }: { dados: Pendencia; aoSalvarTags: (
 
       <div>
         <h4 className="label">Tags</h4>
-        <TagPicker selecionadas={tags} aoMudar={(novas) => aoSalvarTags(novas)} />
+        <TagPicker selecionadas={tags} aoMudar={(novas) => aoSalvarTags(novas)} desabilitado={operacao} />
       </div>
 
       {dados.recorrencia && (
@@ -369,6 +435,7 @@ function VisaoGeral({ dados, aoSalvarTags }: { dados: Pendencia; aoSalvarTags: (
 
 function ChecklistSection({
   itens,
+  operacao,
   aoAdicionar,
   aoToggle,
   aoRemover,
@@ -376,6 +443,7 @@ function ChecklistSection({
   setNovoChecklist
 }: {
   itens: ChecklistItem[]
+  operacao: boolean
   aoAdicionar: (descricao: string) => void
   aoToggle: (itemId: string) => void
   aoRemover: (itemId: string) => void
@@ -406,9 +474,11 @@ function ChecklistSection({
           >
             <button
               onClick={() => aoToggle(item.id)}
+              disabled={operacao}
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition',
-                item.concluido ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 hover:border-brand-400 dark:border-slate-600'
+                item.concluido ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 hover:border-brand-400 dark:border-slate-600',
+                operacao && 'opacity-60'
               )}
             >
               {item.concluido && <CheckCircle2 className="h-4 w-4" />}
@@ -416,7 +486,7 @@ function ChecklistSection({
             <span className={cn('flex-1 text-sm', item.concluido ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100')}>
               {item.descricao}
             </span>
-            <button className="text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-red-500" onClick={() => aoRemover(item.id)}>
+            <button className="text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-red-500 disabled:opacity-40" disabled={operacao} onClick={() => aoRemover(item.id)}>
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -429,6 +499,7 @@ function ChecklistSection({
           placeholder="Adicionar subtarefa..."
           value={novoChecklist}
           onChange={(e) => setNovoChecklist(e.target.value)}
+          disabled={operacao}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && novoChecklist.trim()) {
               aoAdicionar(novoChecklist.trim())
@@ -438,6 +509,7 @@ function ChecklistSection({
         />
         <Button
           variant="secondary"
+          disabled={operacao || !novoChecklist.trim()}
           onClick={() => {
             if (novoChecklist.trim()) {
               aoAdicionar(novoChecklist.trim())
@@ -455,18 +527,22 @@ function ChecklistSection({
 function ComentariosSection({
   comentarios,
   usuarios,
+  operacao,
   novoComentario,
   setNovoComentario,
   aoEnviar
 }: {
   comentarios: Comentario[]
   usuarios: Array<{ id: string; nome: string }>
+  operacao: boolean
   novoComentario: string
   setNovoComentario: (v: string) => void
   aoEnviar: () => void
 }): ReactNode {
   const eu = useAppStore((s) => s.sessao?.usuario)
   const pushToast = useAppStore((s) => s.pushToast)
+  void usuarios
+  void pushToast
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
@@ -477,15 +553,13 @@ function ComentariosSection({
             rows={3}
             placeholder="Escreva um comentário..."
             value={novoComentario}
+            disabled={operacao}
             onChange={(e) => setNovoComentario(e.target.value)}
           />
           <div className="mt-2 flex justify-end">
             <Button
-              onClick={() => {
-                if (!novoComentario.trim()) return
-                void aoEnviar()
-              }}
-              disabled={!novoComentario.trim()}
+              onClick={() => aoEnviar()}
+              disabled={operacao || !novoComentario.trim()}
             >
               Comentar
             </Button>
@@ -513,11 +587,13 @@ function ComentariosSection({
   )
 }
 
-function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: string; anexos: Anexo[]; aoAtualizar: () => Promise<void> }): ReactNode {
+function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar }: { pendenciaId: string; anexos: Anexo[]; operacao: boolean; aoAtualizar: () => Promise<void> }): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
   const [enviando, setEnviando] = useState(false)
+  const enviandoRef = useRef(false)
 
   const enviar = async (arquivo: File): Promise<void> => {
+    if (enviandoRef.current || operacao) return
     const ext = arquivo.name.split('.').pop()?.toLowerCase() || ''
     const permitidas = ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'xlsx', 'txt']
     if (!permitidas.includes(ext)) {
@@ -528,6 +604,7 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
       pushToast('erro', 'Arquivo muito grande', 'Máximo de 15 MB por anexo.')
       return
     }
+    enviandoRef.current = true
     setEnviando(true)
     try {
       const buffer = await arquivo.arrayBuffer()
@@ -549,6 +626,7 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
     } catch (e) {
       pushToast('erro', 'Erro ao enviar anexo', (e as Error).message)
     } finally {
+      enviandoRef.current = false
       setEnviando(false)
     }
   }
@@ -563,6 +641,7 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
   }
 
   const excluir = async (id: string): Promise<void> => {
+    if (enviandoRef.current || operacao) return
     try {
       await call('anexo', 'excluir', { id })
       pushToast('sucesso', 'Anexo removido')
@@ -572,9 +651,14 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
     }
   }
 
+  const ocupado = enviando || operacao
+
   return (
     <div className="space-y-4">
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-8 text-slate-500 transition hover:border-brand-400 hover:text-brand-500 dark:border-slate-700">
+      <label className={cn(
+        'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-8 text-slate-500 transition hover:border-brand-400 hover:text-brand-500 dark:border-slate-700',
+        ocupado && 'pointer-events-none opacity-60'
+      )}>
         {enviando ? <Spinner /> : <Upload className="h-8 w-8" />}
         <span className="text-sm font-medium">{enviando ? 'Enviando...' : 'Clique para enviar anexo'}</span>
         <span className="text-xs text-slate-400">PDF, PNG, JPG, DOCX, XLSX ou TXT · máx. 15 MB</span>
@@ -582,6 +666,7 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
           type="file"
           className="hidden"
           accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt"
+          disabled={ocupado}
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) void enviar(f)
@@ -607,7 +692,7 @@ function AnexosSection({ pendenciaId, anexos, aoAtualizar }: { pendenciaId: stri
             <button className="text-slate-400 hover:text-brand-500" onClick={() => void baixar(a.id)} title="Baixar">
               <Download className="h-4 w-4" />
             </button>
-            <button className="text-slate-400 hover:text-red-500" onClick={() => void excluir(a.id)} title="Excluir">
+            <button className="text-slate-400 hover:text-red-500 disabled:opacity-40" disabled={ocupado} onClick={() => void excluir(a.id)} title="Excluir">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>

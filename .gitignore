@@ -188,3 +188,4 @@ prisma/*.db-shm
 
 # Pendify test artifacts
 .pendify-test
+.pendify-test*
