@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['nodemailer'] })],
     build: {
       outDir: 'out/main',
       sourcemap: true
