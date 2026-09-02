@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Categoria, Cliente, Notificacao, Projeto, Tag, Usuario } from '@shared/types'
+import type { Categoria, Cliente, Equipe, Notificacao, Projeto, Tag, Usuario } from '@shared/types'
 import { call } from '../lib/api'
 
 interface CatalogoState {
@@ -8,6 +8,7 @@ interface CatalogoState {
   tags: (Tag & { quantidade?: number })[]
   categorias: (Categoria & { quantidade?: number })[]
   usuarios: Usuario[]
+  equipes: (Equipe & { quantidadeUsuarios?: number; quantidadePendencias?: number })[]
   notificacoes: Notificacao[]
   carregado: boolean
   carregando: boolean
@@ -23,6 +24,7 @@ export const useCatalogoStore = create<CatalogoState>((set, get) => ({
   tags: [],
   categorias: [],
   usuarios: [],
+  equipes: [],
   notificacoes: [],
   carregado: false,
   carregando: false,
@@ -32,12 +34,13 @@ export const useCatalogoStore = create<CatalogoState>((set, get) => ({
     if (get().carregando) return
     set({ carregando: true })
     try {
-      const [clientes, projetos, tags, categorias, usuarios] = await Promise.all([
+      const [clientes, projetos, tags, categorias, usuarios, equipes] = await Promise.all([
         call<Cliente[]>('cliente', 'listar', {}),
         call<(Projeto & { progresso?: number; totalPendencias?: number; concluidas?: number })[]>('projeto', 'listar', {}),
         call<(Tag & { quantidade?: number })[]>('tag', 'listar', {}),
         call<(Categoria & { quantidade?: number })[]>('categoria', 'listar', {}),
-        call<Usuario[]>('usuario', 'listar', {}).catch(() => [])
+        call<Usuario[]>('usuario', 'listar', {}).catch(() => []),
+        call<(Equipe & { quantidadeUsuarios?: number; quantidadePendencias?: number })[]>('equipe', 'listar', {}).catch(() => [])
       ])
       set({
         clientes,
@@ -45,6 +48,7 @@ export const useCatalogoStore = create<CatalogoState>((set, get) => ({
         tags,
         categorias,
         usuarios,
+        equipes,
         carregado: true,
         carregando: false
       })

@@ -3,6 +3,7 @@ import {
   User,
   Building2,
   Users,
+  Users2,
   Tags as TagsIcon,
   FolderOpen,
   Database,
@@ -19,7 +20,7 @@ import {
   Copy,
   TicketCheck
 } from 'lucide-react'
-import type { Usuario, Categoria, Tag, Empresa, ConfigApp, BackupInfo, Convite } from '@shared/types'
+import type { Usuario, Categoria, Tag, Empresa, ConfigApp, BackupInfo, Convite, Equipe } from '@shared/types'
 import { PERFIS, PERFIL_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
 import { useCatalogoStore } from '../store/catalogoStore'
@@ -27,7 +28,7 @@ import { call } from '../lib/api'
 import { cn, formatarDataHora, formatarTamanho, hexContraste } from '../lib/format'
 import { Button, Input, Textarea, Select, Switch, Modal, ConfirmDialog, Avatar, PerfilBadge, EmptyState, Loading } from '../components/ui'
 
-type Aba = 'perfil' | 'empresa' | 'usuarios' | 'categorias' | 'tags' | 'notificacoes' | 'backup' | 'aparencia'
+type Aba = 'perfil' | 'empresa' | 'usuarios' | 'equipes' | 'categorias' | 'tags' | 'notificacoes' | 'backup' | 'aparencia'
 
 const NOTIF_PADRAO: NonNullable<ConfigApp['notificacoes']> = {
   desktop: true,
@@ -42,6 +43,7 @@ const ABAS: Array<{ id: Aba; rotulo: string; icone: ReactNode }> = [
   { id: 'perfil', rotulo: 'Perfil', icone: <User className="h-4 w-4" /> },
   { id: 'empresa', rotulo: 'Empresa', icone: <Building2 className="h-4 w-4" /> },
   { id: 'usuarios', rotulo: 'Usuários', icone: <Users className="h-4 w-4" /> },
+  { id: 'equipes', rotulo: 'Equipes', icone: <Users2 className="h-4 w-4" /> },
   { id: 'categorias', rotulo: 'Categorias', icone: <FolderOpen className="h-4 w-4" /> },
   { id: 'tags', rotulo: 'Tags', icone: <TagsIcon className="h-4 w-4" /> },
   { id: 'notificacoes', rotulo: 'Notificações', icone: <Bell className="h-4 w-4" /> },
@@ -56,6 +58,7 @@ export function ConfiguracoesPage(): ReactNode {
   const ehGestor = sessao?.usuario.perfil === 'GESTOR'
 
   const abasVisiveis = ABAS.filter((a) => {
+    if (a.id === 'equipes') return ehAdmin
     if (a.id === 'usuarios' || a.id === 'categorias' || a.id === 'tags' || a.id === 'notificacoes' || a.id === 'backup') {
       return ehAdmin || ehGestor
     }
@@ -84,6 +87,7 @@ export function ConfiguracoesPage(): ReactNode {
         {aba === 'perfil' && <PerfilSection />}
         {aba === 'empresa' && <EmpresaSection />}
         {aba === 'usuarios' && <UsuariosSection />}
+        {aba === 'equipes' && <EquipesSection />}
         {aba === 'categorias' && <CategoriasSection />}
         {aba === 'tags' && <TagsSection />}
         {aba === 'notificacoes' && <NotificacoesSection />}
@@ -265,17 +269,19 @@ function EmpresaSection(): ReactNode {
 function UsuariosSection(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
   const usuarios = useCatalogoStore((s) => s.usuarios)
+  const equipes = useCatalogoStore((s) => s.equipes)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const sessao = useAppStore((s) => s.sessao)
+  const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
 
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Usuario | null>(null)
   const [excluindo, setExcluindo] = useState<Usuario | null>(null)
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', perfil: 'USUARIO', cargo: '', telefone: '' })
+  const [form, setForm] = useState({ nome: '', email: '', senha: '', perfil: 'USUARIO', cargo: '', telefone: '', equipeId: '' })
   const [salvando, setSalvando] = useState(false)
 
   const [modalConvite, setModalConvite] = useState(false)
-  const [conviteForm, setConviteForm] = useState({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '' })
+  const [conviteForm, setConviteForm] = useState({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '', equipeId: '' })
   const [conviteResultado, setConviteResultado] = useState<Convite | null>(null)
   const [convites, setConvites] = useState<Convite[]>([])
   const [convitesHistorico, setConvitesHistorico] = useState<Convite[]>([])
@@ -294,7 +300,7 @@ function UsuariosSection(): ReactNode {
 
   function abrirModal(u: Usuario | null): void {
     setEditando(u)
-    setForm(u ? { nome: u.nome, email: u.email, senha: '', perfil: u.perfil, cargo: u.cargo || '', telefone: u.telefone || '' } : { nome: '', email: '', senha: '', perfil: 'USUARIO', cargo: '', telefone: '' })
+    setForm(u ? { nome: u.nome, email: u.email, senha: '', perfil: u.perfil, cargo: u.cargo || '', telefone: u.telefone || '', equipeId: u.equipeId || '' } : { nome: '', email: '', senha: '', perfil: 'USUARIO', cargo: '', telefone: '', equipeId: '' })
     setModalAberto(true)
   }
 
@@ -311,11 +317,12 @@ function UsuariosSection(): ReactNode {
     try {
       if (editando) {
         const payload: Record<string, unknown> = { nome: form.nome, email: form.email, perfil: form.perfil, cargo: form.cargo || null, telefone: form.telefone || null }
+        if (ehAdmin) payload.equipeId = form.equipeId || null
         if (form.senha) payload.senha = form.senha
         await call('usuario', 'atualizar', { id: editando.id, ...payload })
         pushToast('sucesso', 'Usuário atualizado')
       } else {
-        await call('usuario', 'criar', { ...form, senha: form.senha })
+        await call('usuario', 'criar', { ...form, senha: form.senha, equipeId: ehAdmin ? (form.equipeId || null) : null })
         pushToast('sucesso', 'Usuário criado')
       }
       setModalAberto(false)
@@ -334,7 +341,7 @@ function UsuariosSection(): ReactNode {
     }
     setSalvandoConvite(true)
     try {
-      const convite = await call<Convite>('usuario', 'convidar', { ...conviteForm })
+      const convite = await call<Convite>('usuario', 'convidar', { ...conviteForm, equipeId: ehAdmin ? (conviteForm.equipeId || null) : null })
       setConviteResultado(convite)
       await carregarConvites()
     } catch (e) {
@@ -358,11 +365,11 @@ function UsuariosSection(): ReactNode {
     if (!excluindo) return
     try {
       await call('usuario', 'excluir', { id: excluindo.id })
-      pushToast('sucesso', 'Usuário desativado')
+      pushToast('sucesso', 'Usuário excluído')
       setExcluindo(null)
       await carregarCatalogo(true)
     } catch (e) {
-      pushToast('erro', 'Falha ao excluir', e instanceof Error ? e.message : undefined)
+      pushToast('erro', 'Não foi possível excluir', e instanceof Error ? e.message : undefined)
     }
   }
 
@@ -383,7 +390,7 @@ function UsuariosSection(): ReactNode {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Usuários</h2>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => { setConviteResultado(null); setConviteForm({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '' }); setModalConvite(true) }}>
+          <Button variant="secondary" onClick={() => { setConviteResultado(null); setConviteForm({ nome: '', email: '', perfil: 'USUARIO', cargo: '', telefone: '', equipeId: '' }); setModalConvite(true) }}>
             <Mail className="h-4 w-4" /> Convidar por e-mail
           </Button>
           <Button onClick={() => abrirModal(null)}><Plus className="h-4 w-4" /> Novo usuário</Button>
@@ -433,6 +440,7 @@ function UsuariosSection(): ReactNode {
               <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{u.nome}</p>
               <p className="truncate text-xs text-slate-400">{u.email} {u.cargo ? ` · ${u.cargo}` : ''}</p>
             </div>
+            <span className="hidden max-w-[160px] truncate rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 sm:inline dark:bg-slate-800 dark:text-slate-300">{u.equipe?.nome || 'Sem equipe'}</span>
             <PerfilBadge perfil={u.perfil} />
             {!u.ativo && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800">Inativo</span>}
             {u.id === sessao?.usuario.id ? (
@@ -467,6 +475,15 @@ function UsuariosSection(): ReactNode {
               {PERFIS.map((p) => <option key={p} value={p}>{PERFIL_LABEL[p]}</option>)}
             </Select>
           </div>
+          {ehAdmin && (
+            <div>
+              <label className="label">Equipe</label>
+              <Select value={form.equipeId} onChange={(e) => setForm((f) => ({ ...f, equipeId: e.target.value }))}>
+                <option value="">Sem equipe</option>
+                {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
+              </Select>
+            </div>
+          )}
           <div>
             <label className="label">Cargo</label>
             <Input value={form.cargo} onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))} />
@@ -521,6 +538,15 @@ function UsuariosSection(): ReactNode {
                 {PERFIS.map((p) => <option key={p} value={p}>{PERFIL_LABEL[p]}</option>)}
               </Select>
             </div>
+            {ehAdmin && (
+              <div>
+                <label className="label">Equipe</label>
+                <Select value={conviteForm.equipeId} onChange={(e) => setConviteForm((f) => ({ ...f, equipeId: e.target.value }))}>
+                  <option value="">Sem equipe</option>
+                  {equipes.map((eq) => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
+                </Select>
+              </div>
+            )}
             <div>
               <label className="label">Cargo</label>
               <Input value={conviteForm.cargo} onChange={(e) => setConviteForm((f) => ({ ...f, cargo: e.target.value }))} />
@@ -543,9 +569,225 @@ function UsuariosSection(): ReactNode {
         aberto={!!excluindo}
         aoFechar={() => setExcluindo(null)}
         aoConfirmar={() => void excluir()}
-        titulo="Desativar usuário"
-        mensagem={`Desativar o acesso de "${excluindo?.nome || ''}"?`}
-        confirmarTexto="Desativar"
+        titulo="Excluir usuário"
+        mensagem={`Tem certeza que deseja excluir este usuário (${excluindo?.nome || ''})? Essa ação não poderá ser desfeita. Se o usuário possuir pendências ou for líder de uma equipe, ele não poderá ser excluído — nesse caso, desative o acesso.`}
+        confirmarTexto="Excluir"
+        perigo
+      />
+    </div>
+  )
+}
+
+function EquipesSection(): ReactNode {
+  const pushToast = useAppStore((s) => s.pushToast)
+  const equipes = useCatalogoStore((s) => s.equipes)
+  const usuarios = useCatalogoStore((s) => s.usuarios)
+  const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
+
+  const [modalAberto, setModalAberto] = useState(false)
+  const [editando, setEditando] = useState<Equipe | null>(null)
+  const [form, setForm] = useState({ nome: '', descricao: '', ativo: true, liderId: '', usuarioIds: [] as string[] })
+  const [salvando, setSalvando] = useState(false)
+
+  const [membrosDe, setMembrosDe] = useState<Equipe | null>(null)
+  const [membrosSelecionados, setMembrosSelecionados] = useState<string[]>([])
+  const [salvandoMembros, setSalvandoMembros] = useState(false)
+
+  const [excluindo, setExcluindo] = useState<Equipe | null>(null)
+
+  useEffect(() => {
+    void carregarCatalogo(true)
+  }, [carregarCatalogo])
+
+  async function abrirModal(eq: Equipe | null): Promise<void> {
+    setEditando(eq)
+    setForm({ nome: '', descricao: '', ativo: true, liderId: '', usuarioIds: [] })
+    if (eq) {
+      const detalhe = await call<(Equipe & { usuarios: Array<{ id: string; nome: string; email: string; perfil: string; ativo: boolean }> })>('equipe', 'obter', { id: eq.id }).catch(() => null)
+      setForm({
+        nome: eq.nome,
+        descricao: eq.descricao || '',
+        ativo: eq.ativo,
+        liderId: eq.liderId || '',
+        usuarioIds: (detalhe?.usuarios || []).map((u) => u.id)
+      })
+    }
+    setModalAberto(true)
+  }
+
+  function alternarMembro(id: string): void {
+    setForm((f) => {
+      const tem = f.usuarioIds.includes(id)
+      const ids = tem ? f.usuarioIds.filter((x) => x !== id) : [...f.usuarioIds, id]
+      return { ...f, usuarioIds: ids, liderId: tem && f.liderId === id ? '' : f.liderId }
+    })
+  }
+
+  async function salvar(): Promise<void> {
+    if (!form.nome.trim()) {
+      pushToast('erro', 'Informe o nome da equipe.')
+      return
+    }
+    setSalvando(true)
+    try {
+      const payload = { nome: form.nome, descricao: form.descricao || null, ativo: form.ativo, liderId: form.liderId || null }
+      if (editando) {
+        await call('equipe', 'atualizar', { id: editando.id, ...payload })
+        await call('equipe', 'membros', { id: editando.id, usuarioIds: form.usuarioIds })
+        pushToast('sucesso', 'Equipe atualizada')
+      } else {
+        await call('equipe', 'criar', { ...payload, usuarioIds: form.usuarioIds })
+        pushToast('sucesso', 'Equipe criada')
+      }
+      setModalAberto(false)
+      await carregarCatalogo(true)
+    } catch (e) {
+      pushToast('erro', 'Falha ao salvar equipe', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  function abrirMembros(eq: Equipe): void {
+    setMembrosDe(eq)
+    void call<(Equipe & { usuarios: Array<{ id: string; nome: string; email: string; perfil: string; ativo: boolean }> })>('equipe', 'obter', { id: eq.id })
+      .then((d) => setMembrosSelecionados((d.usuarios || []).map((u) => u.id)))
+      .catch(() => setMembrosSelecionados([]))
+  }
+
+  async function salvarMembros(): Promise<void> {
+    if (!membrosDe) return
+    setSalvandoMembros(true)
+    try {
+      await call('equipe', 'membros', { id: membrosDe.id, usuarioIds: membrosSelecionados })
+      pushToast('sucesso', 'Membros atualizados')
+      setMembrosDe(null)
+      await carregarCatalogo(true)
+    } catch (e) {
+      pushToast('erro', 'Falha ao atualizar membros', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSalvandoMembros(false)
+    }
+  }
+
+  async function excluir(): Promise<void> {
+    if (!excluindo) return
+    try {
+      await call('equipe', 'excluir', { id: excluindo.id })
+      pushToast('sucesso', 'Equipe excluída')
+      setExcluindo(null)
+      await carregarCatalogo(true)
+    } catch (e) {
+      pushToast('erro', 'Não foi possível excluir', e instanceof Error ? e.message : undefined)
+    }
+  }
+
+  const nomeLider = (id: string | null | undefined) => usuarios.find((u) => u.id === id)?.nome || '—'
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Equipes</h2>
+        <Button onClick={() => void abrirModal(null)}><Plus className="h-4 w-4" /> Nova equipe</Button>
+      </div>
+
+      <div className="card divide-y divide-slate-100 dark:divide-slate-800">
+        {equipes.length === 0 ? (
+          <EmptyState titulo="Nenhuma equipe" descricao="Crie equipes para organizar usuários e pendências." />
+        ) : (
+          equipes.map((eq) => (
+            <div key={eq.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{eq.nome}</p>
+                <p className="truncate text-xs text-slate-400">
+                  Líder: {nomeLider(eq.liderId)} · {eq.quantidadeUsuarios ?? 0} usuário(s) · {eq.quantidadePendencias ?? 0} pendência(s)
+                </p>
+              </div>
+              {!eq.ativo && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800">Inativa</span>}
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => void abrirModal(eq)} title="Editar equipe"><Pencil className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => abrirMembros(eq)} title="Gerenciar usuários"><Users className="h-3.5 w-3.5" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => setExcluindo(eq)} title="Excluir equipe"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <Modal aberto={modalAberto} aoFechar={() => setModalAberto(false)} titulo={editando ? 'Editar equipe' : 'Nova equipe'} largura="max-w-xl">
+        <div className="space-y-3">
+          <div>
+            <label className="label">Nome *</label>
+            <Input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Descrição</label>
+            <Textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={2} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-slate-700 dark:text-slate-300">Equipe ativa</span>
+            <Switch marcado={form.ativo} aoMudar={(v) => setForm((f) => ({ ...f, ativo: v }))} />
+          </div>
+          <div>
+            <label className="label">Líder da equipe</label>
+            <Select value={form.liderId} onChange={(e) => {
+              const id = e.target.value
+              setForm((f) => ({ ...f, liderId: id, usuarioIds: id && !f.usuarioIds.includes(id) ? [...f.usuarioIds, id] : f.usuarioIds }))
+            }}>
+              <option value="">Sem líder</option>
+              {usuarios.filter((u) => u.ativo).map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+            </Select>
+            {form.liderId && <p className="mt-1 text-xs text-slate-400">O líder é automaticamente incluído como membro da equipe.</p>}
+          </div>
+          <div>
+            <label className="label">Membros da equipe</label>
+            <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+              {usuarios.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">Nenhum usuário disponível.</p>}
+              {usuarios.filter((u) => u.ativo).map((u) => (
+                <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <input type="checkbox" checked={form.usuarioIds.includes(u.id)} onChange={() => alternarMembro(u.id)} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                  <span className="truncate text-slate-700 dark:text-slate-300">{u.nome}</span>
+                  {form.liderId === u.id && <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">Líder</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setModalAberto(false)}>Cancelar</Button>
+          <Button onClick={() => void salvar()} carregando={salvando}>Salvar</Button>
+        </div>
+      </Modal>
+
+      <Modal aberto={!!membrosDe} aoFechar={() => setMembrosDe(null)} titulo={`Gerenciar membros - ${membrosDe?.nome || ''}`} largura="max-w-xl">
+        <div className="max-h-[60vh] space-y-1 overflow-y-auto">
+          {usuarios.length === 0 && <p className="text-sm text-slate-400">Nenhum usuário disponível.</p>}
+          {usuarios.map((u) => (
+            <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+              <input
+                type="checkbox"
+                checked={membrosSelecionados.includes(u.id)}
+                onChange={() => setMembrosSelecionados((ids) => (ids.includes(u.id) ? ids.filter((x) => x !== u.id) : [...ids, u.id]))}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              />
+              <span className="truncate text-slate-700 dark:text-slate-300">{u.nome}</span>
+              {membrosDe?.liderId === u.id && <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">Líder</span>}
+            </label>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setMembrosDe(null)}>Cancelar</Button>
+          <Button onClick={() => void salvarMembros()} carregando={salvandoMembros}>Salvar membros</Button>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        aberto={!!excluindo}
+        aoFechar={() => setExcluindo(null)}
+        aoConfirmar={() => void excluir()}
+        titulo="Excluir equipe"
+        mensagem={`Excluir a equipe "${excluindo?.nome || ''}"? Os usuários serão movidos para "Sem equipe". Equipes com pendências não podem ser excluídas.`}
+        confirmarTexto="Excluir"
         perigo
       />
     </div>

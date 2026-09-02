@@ -25,6 +25,20 @@ export interface Empresa {
   atualizadoEm: string
 }
 
+export interface Equipe {
+  id: string
+  nome: string
+  descricao: string | null
+  liderId: string | null
+  ativo: boolean
+  criadoEm: string
+  atualizadoEm: string
+  lider?: Usuario | null
+  usuarios?: Usuario[]
+  quantidadeUsuarios?: number
+  quantidadePendencias?: number
+}
+
 export interface Usuario {
   id: string
   nome: string
@@ -35,9 +49,11 @@ export interface Usuario {
   avatar: string | null
   ativo: boolean
   empresaId: string | null
+  equipeId: string | null
   ultimoAcesso: string | null
   criadoEm: string
   atualizadoEm: string
+  equipe?: Equipe | null
 }
 
 export interface Cliente {
@@ -128,6 +144,7 @@ export interface Pendencia {
   sistema: string | null
   responsavelId: string | null
   criadorId: string
+  equipeId: string | null
   criadoEm: string
   prazo: string | null
   horario: string | null
@@ -144,6 +161,7 @@ export interface Pendencia {
   cliente?: Cliente | null
   projeto?: Projeto | null
   categoria?: Categoria | null
+  equipe?: Equipe | null
   tags?: PendenciaTag[]
   comentarios?: Comentario[]
   anexos?: Anexo[]
@@ -263,6 +281,7 @@ export interface Convite {
   cargo: string | null
   telefone: string | null
   empresaId: string | null
+  equipeId: string | null
   criadoEm: string
   expiraEm: string
   usadoEm: string | null
@@ -287,6 +306,7 @@ export interface ApiContext {
   usuarioId: string
   perfil: Perfil
   empresaId: string | null
+  equipeId: string | null
   isAdmin: boolean
 }
 
@@ -298,6 +318,7 @@ export interface FiltroPendencias {
   projetoId?: string
   responsavelId?: string
   categoriaId?: string
+  equipeId?: string
   tags?: string[]
   departamento?: string
   prazoDe?: string
@@ -362,6 +383,7 @@ export interface DadosDashboard {
   porStatus: Array<{ label: string; valor: number }>
   porTag: Array<{ tag: Tag; valor: number }>
   porCategoria: Array<{ label: string; valor: number }>
+  porEquipe: Array<{ label: string; valor: number }>
   atividadeRecente: Historico[]
   lembretes: Lembrete[]
   meuDia: {
@@ -414,4 +436,5 @@ export type EntidadeHistorico =
   | 'nota'
   | 'anexo'
   | 'usuario'
+  | 'equipe'
   | 'empresa'

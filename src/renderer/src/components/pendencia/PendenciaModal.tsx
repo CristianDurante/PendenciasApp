@@ -29,7 +29,8 @@ export function PendenciaModal(): ReactNode {
     status: 'A_FAZER',
     tags: [],
     recorrencia: '',
-    observacoes: ''
+    observacoes: '',
+    equipeId: ''
   })
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -56,7 +57,8 @@ export function PendenciaModal(): ReactNode {
           status: 'A_FAZER',
           tags: (presets?.tags as string[]) || [],
           recorrencia: '',
-          observacoes: ''
+          observacoes: '',
+          equipeId: ''
         })
         setEditandoId(null)
       }
@@ -85,6 +87,7 @@ export function PendenciaModal(): ReactNode {
         status: dados.status,
         tags: dados.tags,
         observacoes: dados.observacoes,
+        equipeId: dados.equipeId || null,
         recorrencia: dados.recorrencia
           ? { tipo: dados.recorrencia, intervalo: 1, ativo: true }
           : null

@@ -5,6 +5,7 @@ import { login as serviceLogin, aceitarConvite as serviceAceitarConvite } from '
 
 import * as empresaService from './empresa.service'
 import * as usuarioService from './usuario.service'
+import * as equipeService from './equipe.service'
 import * as categoriaService from './categoria.service'
 import * as tagService from './tag.service'
 import * as clienteService from './cliente.service'
@@ -44,6 +45,14 @@ export const registry: Record<string, Record<string, Handler>> = {
     convidar: (ctx, a) => usuarioService.convidarUsuario(ctx, a),
     convites: (ctx, a) => usuarioService.listarConvites(ctx, a),
     cancelarConvite: (ctx, a) => usuarioService.cancelarConvite(ctx, a)
+  },
+  equipe: {
+    listar: (ctx, a) => equipeService.listarEquipes(ctx),
+    obter: (ctx, a) => equipeService.obterEquipe(ctx, a),
+    criar: (ctx, a) => equipeService.criarEquipe(ctx, a),
+    atualizar: (ctx, a) => equipeService.atualizarEquipe(ctx, a),
+    membros: (ctx, a) => equipeService.gerenciarMembros(ctx, a),
+    excluir: (ctx, a) => equipeService.excluirEquipe(ctx, a)
   },
   categoria: {
     listar: (ctx, a) => categoriaService.listarCategorias(),
@@ -95,7 +104,7 @@ export const registry: Record<string, Record<string, Handler>> = {
     comentarioExcluir: (ctx, a) => pendenciaService.excluirComentario(ctx, a)
   },
   anexo: {
-    listar: (ctx, a) => anexoService.listarAnexos(a),
+    listar: (ctx, a) => anexoService.listarAnexos(ctx, a),
     criar: (ctx, a) => anexoService.criarAnexo(ctx, a),
     conteudo: (ctx, a) => anexoService.obterConteudoAnexo(ctx, a),
     excluir: (ctx, a) => anexoService.excluirAnexo(ctx, a)
@@ -124,7 +133,7 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => retornoService.excluirRetorno(ctx, a)
   },
   dashboard: {
-    obter: (ctx, a) => dashboardService.obterDashboard(ctx)
+    obter: (ctx, a) => dashboardService.obterDashboard(ctx, a)
   },
   busca: {
     global: (ctx, a) => buscaService.buscaGlobal(ctx, a)
@@ -149,8 +158,8 @@ export const registry: Record<string, Record<string, Handler>> = {
     pdf: (ctx, a) => relatorioService.dadosParaPdf(ctx)
   },
   historico: {
-    listar: (ctx, a) => listarHistorico(String(a.entidade || ''), String(a.entidadeId || '')),
-    global: (ctx, a) => historicoGlobal(Number(a.limite) || 50)
+    listar: (ctx, a) => listarHistorico(ctx, String(a.entidade || ''), String(a.entidadeId || '')),
+    global: (ctx, a) => historicoGlobal(ctx, Number(a.limite) || 50)
   },
   backup: {
     info: (ctx, a) => backupService.obterInfoBackup(),

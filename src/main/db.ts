@@ -121,8 +121,8 @@ export async function ensureDatabase(): Promise<void> {
   } else {
     const ok = await temTabela('pendencias')
     if (ok) {
-      // Banco existente: aplica migrações pendentes (ex.: codigos_recuperacao)
-      if (!(await temTabela('codigos_recuperacao'))) await runMigration()
+      // Banco existente: aplica migrações pendentes (ex.: codigos_recuperacao, equipes)
+      if (!(await temTabela('equipes'))) await runMigration()
     } else {
       await runMigration()
     }

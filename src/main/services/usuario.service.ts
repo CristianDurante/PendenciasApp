@@ -6,6 +6,7 @@ import { PERFIS } from '@shared/constants'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { addDays } from 'date-fns'
+import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 
 const UsuarioCreateSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório').max(120),
@@ -13,7 +14,8 @@ const UsuarioCreateSchema = z.object({
   senha: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
   perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).default('USUARIO'),
   cargo: z.string().max(80).optional().nullable(),
-  telefone: z.string().max(30).optional().nullable()
+  telefone: z.string().max(30).optional().nullable(),
+  equipeId: z.string().optional().nullable()
 })
 
 const ConviteSchema = z.object({
@@ -21,7 +23,8 @@ const ConviteSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório').max(120),
   perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).default('USUARIO'),
   cargo: z.string().max(80).optional().nullable(),
-  telefone: z.string().max(30).optional().nullable()
+  telefone: z.string().max(30).optional().nullable(),
+  equipeId: z.string().optional().nullable()
 })
 
 const UsuarioUpdateSchema = z.object({
@@ -31,7 +34,8 @@ const UsuarioUpdateSchema = z.object({
   cargo: z.string().max(80).optional().nullable(),
   telefone: z.string().max(30).optional().nullable(),
   senha: z.string().min(6).optional(),
-  ativo: z.boolean().optional()
+  ativo: z.boolean().optional(),
+  equipeId: z.string().optional().nullable()
 })
 
 const select = {
@@ -44,10 +48,20 @@ const select = {
   avatar: true,
   ativo: true,
   empresaId: true,
+  equipeId: true,
   ultimoAcesso: true,
   criadoEm: true,
-  atualizadoEm: true
+  atualizadoEm: true,
+  equipe: { select: { id: true, nome: true } }
 } as const
+
+// Resolve a equipe informada (ou a padrão "Sem equipe").
+async function resolverEquipeId(db: ReturnType<typeof getPrisma>, equipeId: string | null | undefined): Promise<string | null> {
+  const id = equipeId || EQUIPE_SEM_EQUIPE_ID
+  const equipe = await db.equipe.findUnique({ where: { id } })
+  if (!equipe) throw new AppError('Equipe informada não existe')
+  return id
+}
 
 export async function listarUsuarios(ctx: ApiContext): Promise<unknown> {
   requireAdminOrGestor(ctx)
@@ -79,7 +93,8 @@ export async function criarUsuario(ctx: ApiContext, args: Record<string, unknown
       perfil: parsed.perfil,
       cargo: parsed.cargo || null,
       telefone: parsed.telefone || null,
-      empresaId: ctx.empresaId
+      empresaId: ctx.empresaId,
+      equipeId: await resolverEquipeId(db, parsed.equipeId)
     },
     select
   })
@@ -119,13 +134,39 @@ export async function atualizarUsuario(ctx: ApiContext, args: Record<string, unk
   if (parsed.telefone !== undefined) data.telefone = parsed.telefone
   if (parsed.ativo !== undefined) data.ativo = parsed.ativo
   if (parsed.senha) data.senhaHash = hashPassword(parsed.senha)
+
+  let transferenciaEquipe: { origem: string; destino: string } | null = null
+  if (parsed.equipeId !== undefined) {
+    const novoEquipeId = await resolverEquipeId(db, parsed.equipeId)
+    if (novoEquipeId !== existente.equipeId) {
+      // Líder só pode sair da equipe se um novo líder for definido antes.
+      if (existente.equipeId) {
+        const liderDe = await db.equipe.findFirst({ where: { liderId: id } })
+        if (liderDe && liderDe.id !== novoEquipeId) {
+          throw new AppError('Este usuário é líder da equipe atual. Defina um novo líder antes de movê-lo.')
+        }
+      }
+      const origemEquipe = existente.equipeId ? await db.equipe.findUnique({ where: { id: existente.equipeId } }) : null
+      const destinoEquipe = novoEquipeId ? await db.equipe.findUnique({ where: { id: novoEquipeId } }) : null
+      data.equipeId = novoEquipeId
+      transferenciaEquipe = { origem: origemEquipe?.nome || 'Sem equipe', destino: destinoEquipe?.nome || 'Sem equipe' }
+    }
+  }
+  if (parsed.ativo === false) {
+    const liderDe = await db.equipe.findFirst({ where: { liderId: id } })
+    if (liderDe) {
+      throw new AppError(`Este usuário é líder da equipe "${liderDe.nome}". Defina um novo líder antes de desativá-lo.`)
+    }
+  }
   const u = await db.usuario.update({ where: { id }, data, select })
   await registrarHistorico({
     entidade: 'usuario',
     entidadeId: u.id,
     usuarioId: ctx.usuarioId,
     tipo: 'ALTERACAO',
-    descricao: `Dados do usuário "${u.nome}" atualizados`
+    descricao: transferenciaEquipe
+      ? `Usuário transferido da equipe ${transferenciaEquipe.origem} para a equipe ${transferenciaEquipe.destino}`
+      : `Dados do usuário "${u.nome}" atualizados`
   })
   return deepIso(u)
 }
@@ -136,21 +177,37 @@ export async function excluirUsuario(ctx: ApiContext, args: Record<string, unkno
   if (!id) throw new AppError('ID do usuário é obrigatório')
   if (id === ctx.usuarioId) throw new AppError('Você não pode excluir a si mesmo')
   const db = getPrisma()
-  const existente = await db.usuario.findUnique({ where: { id } })
+  const existente = await db.usuario.findUnique({
+    where: { id },
+    include: { _count: { select: { pendenciasCriadas: true } } }
+  })
   if (!existente) throw new AppError('Usuário não encontrado', 404)
   if (existente.perfil === 'ADMIN') {
     const admins = await db.usuario.count({ where: { perfil: 'ADMIN' } })
     if (admins <= 1) throw new AppError('Não é possível excluir o último administrador')
   }
-  await db.sessao.deleteMany({ where: { usuarioId: id } })
-  await db.usuario.update({ where: { id }, data: { ativo: false } })
+
+  // Exclusão física: bloqueada quando há vínculos que não podem ser quebrados.
+  // Nesses casos, mantemos o usuário (com a possibilidade de desativação) e informamos o motivo.
+  if (existente._count.pendenciasCriadas > 0) {
+    throw new AppError(
+      `Este usuário criou ${existente._count.pendenciasCriadas} pendência(s) e não pode ser excluído. Desative o usuário para impedir o acesso.`
+    )
+  }
+  const liderDe = await db.equipe.findFirst({ where: { liderId: id } })
+  if (liderDe) {
+    throw new AppError(`Este usuário é líder da equipe "${liderDe.nome}". Defina um novo líder antes de excluí-lo.`)
+  }
+
   await registrarHistorico({
     entidade: 'usuario',
     entidadeId: id,
     usuarioId: ctx.usuarioId,
     tipo: 'EXCLUSAO',
-    descricao: `Usuário "${existente.nome}" desativado`
+    descricao: `Usuário "${existente.nome}" excluído permanentemente`
   })
+  await db.sessao.deleteMany({ where: { usuarioId: id } })
+  await db.usuario.delete({ where: { id } })
   return { ok: true }
 }
 
@@ -173,6 +230,7 @@ const conviteSelect = {
   cargo: true,
   telefone: true,
   empresaId: true,
+  equipeId: true,
   token: true,
   criadoEm: true,
   expiraEm: true,
@@ -200,6 +258,7 @@ export async function convidarUsuario(ctx: ApiContext, args: Record<string, unkn
       cargo: parsed.cargo || null,
       telefone: parsed.telefone || null,
       empresaId: ctx.empresaId,
+      equipeId: parsed.equipeId ? await resolverEquipeId(db, parsed.equipeId) : null,
       criadoPorId: ctx.usuarioId,
       token: gerarCodigoConvite(),
       expiraEm: addDays(new Date(), 7)

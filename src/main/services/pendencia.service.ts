@@ -1,9 +1,10 @@
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getPrisma } from '../db'
-import { AppError } from '../auth'
+import { AppError, exigirAcessoEquipe, temAcessoGlobal } from '../auth'
 import { PRIORIDADES, PENDENCIA_STATUS } from '@shared/constants'
 import type { ApiContext, FiltroPendencias, Pendencia, Prioridade, PendenciaStatus } from '@shared/types'
+import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 import {
   deepIso,
   isAtrasada,
@@ -23,10 +24,27 @@ export const pendenciaInclude = {
   cliente: true,
   projeto: true,
   categoria: true,
+  equipe: { select: { id: true, nome: true } },
   tags: { include: { tag: true } },
   checklist: { orderBy: { criadoEm: 'asc' as const } },
   comentarios: { include: { usuario: { select: { id: true, nome: true, avatar: true } } }, orderBy: { criadoEm: 'asc' as const } },
   anexos: { include: { usuario: { select: { id: true, nome: true, avatar: true } } }, orderBy: { criadoEm: 'desc' as const } }
+}
+
+// Carrega a pendência e valida que o usuário pertence à equipe dela (ou tem acesso global).
+async function carregarComAcesso(ctx: ApiContext, id: string) {
+  const db = getPrisma()
+  const p = await db.pendencia.findUnique({ where: { id } })
+  if (!p) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, p.equipeId)
+  return p
+}
+
+// Escopo de equipe para listagens: usuário comum fica preso à própria equipe;
+// acesso global pode filtrar por equipe informada.
+function escopoEquipe(ctx: ApiContext, filtroEquipeId?: string) {
+  if (!temAcessoGlobal(ctx)) return ctx.equipeId || EQUIPE_SEM_EQUIPE_ID
+  return filtroEquipeId || undefined
 }
 
 const PendenciaCreateSchema = z.object({
@@ -41,6 +59,7 @@ const PendenciaCreateSchema = z.object({
   prioridade: z.enum(PRIORIDADES as [Prioridade, ...Prioridade[]]).default('NORMAL'),
   categoriaId: z.string().optional().nullable(),
   departamento: z.string().max(80).optional().nullable(),
+  equipeId: z.string().optional().nullable(),
   status: z.enum(PENDENCIA_STATUS as [PendenciaStatus, ...PendenciaStatus[]]).default('A_FAZER'),
   observacoes: z.string().max(5000).optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
@@ -85,6 +104,7 @@ function buildWhere(filtro: FiltroPendencias): Prisma.PendenciaWhereInput {
   if (filtro.projetoId) where.projetoId = filtro.projetoId
   if (filtro.responsavelId) where.responsavelId = filtro.responsavelId
   if (filtro.categoriaId) where.categoriaId = filtro.categoriaId
+  if (filtro.equipeId) where.equipeId = filtro.equipeId
   if (filtro.departamento) where.departamento = filtro.departamento
   if (filtro.tags && filtro.tags.length) {
     where.tags = { some: { tagId: { in: filtro.tags } } }
@@ -141,12 +161,13 @@ function ordenarItens(itens: Pendencia[], filtro: FiltroPendencias): Pendencia[]
   })
 }
 
-export async function listarPendencias(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+export async function listarPendencias(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const filtro = args as unknown as FiltroPendencias
   const pagina = Math.max(1, Number(filtro.pagina) || 1)
   const porPagina = Math.min(200, Math.max(1, Number(filtro.porPagina) || 20))
-  const where = buildWhere(filtro)
+  const equipeId = escopoEquipe(ctx, filtro.equipeId)
+  const where = buildWhere({ ...filtro, equipeId })
 
   const total = await db.pendencia.count({ where })
   const itens = await db.pendencia.findMany({
@@ -164,17 +185,23 @@ export async function listarPendencias(_ctx: ApiContext, args: Record<string, un
   return { itens: serializados, total, pagina, porPagina }
 }
 
-export async function obterPendencia(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+export async function obterPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
   const p = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
   if (!p) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, p.equipeId)
   return serializarPendencia(p as never)
 }
 
 export async function criarPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const parsed = PendenciaCreateSchema.parse(args)
+  // Equipe da pendência: herda a equipe do usuário criador. Acesso global (ADM/GESTOR)
+  // pode escolher a equipe no momento da criação; usuário comum fica na própria equipe.
+  const equipeId = temAcessoGlobal(ctx)
+    ? parsed.equipeId || ctx.equipeId || EQUIPE_SEM_EQUIPE_ID
+    : ctx.equipeId || EQUIPE_SEM_EQUIPE_ID
   const p = await db.pendencia.create({
     data: {
       titulo: parsed.titulo,
@@ -184,6 +211,7 @@ export async function criarPendencia(ctx: ApiContext, args: Record<string, unkno
       sistema: parsed.sistema || null,
       responsavelId: parsed.responsavelId || null,
       criadorId: ctx.usuarioId,
+      equipeId,
       prazo: parsed.prazo ? parseISO(parsed.prazo) : null,
       horario: parsed.horario || null,
       prioridade: parsed.prioridade,
@@ -231,9 +259,9 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
   const id = String(args.id || '')
   if (!id) throw new AppError('ID da pendência é obrigatório')
   const parsed = PendenciaUpdateSchema.parse(args)
-  const anterior = await db.pendencia.findUnique({ where: { id } })
-  if (!anterior) throw new AppError('Pendência não encontrada', 404)
+  const anterior = await carregarComAcesso(ctx, id)
 
+  let transferenciaEquipe: { origemNome: string; destinoNome: string } | null = null
   const data: Prisma.PendenciaUncheckedUpdateInput = {}
   if (parsed.titulo !== undefined) data.titulo = parsed.titulo
   if (parsed.descricao !== undefined) data.descricao = parsed.descricao || null
@@ -246,6 +274,22 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
   if (parsed.prioridade !== undefined) data.prioridade = parsed.prioridade
   if (parsed.categoriaId !== undefined) data.categoriaId = parsed.categoriaId || null
   if (parsed.departamento !== undefined) data.departamento = parsed.departamento || null
+  if (parsed.equipeId !== undefined) {
+    if (temAcessoGlobal(ctx)) {
+      if (parsed.equipeId !== anterior.equipeId) {
+        const destino = await db.equipe.findUnique({ where: { id: parsed.equipeId! } })
+        if (!destino) throw new AppError('Equipe de destino não encontrada', 404)
+        const origem = anterior.equipeId ? await db.equipe.findUnique({ where: { id: anterior.equipeId } }) : null
+        data.equipeId = parsed.equipeId
+        transferenciaEquipe = {
+          origemNome: origem?.nome || 'Sem equipe',
+          destinoNome: destino.nome
+        }
+      }
+    } else if (parsed.equipeId !== anterior.equipeId) {
+      throw new AppError('Você não pode transferir esta pendência de equipe', 403)
+    }
+  }
   if (parsed.status !== undefined) data.status = parsed.status
   if (parsed.observacoes !== undefined) data.observacoes = parsed.observacoes || null
   if (parsed.recorrencia !== undefined) data.recorrencia = parsed.recorrencia ? JSON.stringify(parsed.recorrencia) : null
@@ -302,6 +346,16 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
     })
   }
 
+  if (transferenciaEquipe) {
+    await registrarHistorico({
+      entidade: 'pendencia',
+      entidadeId: id,
+      usuarioId: ctx.usuarioId,
+      tipo: 'EQUIPE',
+      descricao: `Pendência transferida da equipe ${transferenciaEquipe.origemNome} para a equipe ${transferenciaEquipe.destinoNome}`
+    })
+  }
+
   const completa = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
   return serializarPendencia(completa as never)
 }
@@ -309,8 +363,7 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
 export async function excluirPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   await registrarHistorico({
     entidade: 'pendencia',
     entidadeId: id,
@@ -325,8 +378,9 @@ export async function excluirPendencia(ctx: ApiContext, args: Record<string, unk
 export async function duplicarPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
-  const origem = await db.pendencia.findUnique({ where: { id }, include: { tags: true, checklist: true } })
-  if (!origem) throw new AppError('Pendência não encontrada', 404)
+  const origem = await carregarComAcesso(ctx, id)
+  const completaOrigem = await db.pendencia.findUnique({ where: { id }, include: { tags: true, checklist: true } })
+  if (!completaOrigem) throw new AppError('Pendência não encontrada', 404)
   const nova = await db.pendencia.create({
     data: {
       titulo: `${origem.titulo} (cópia)`,
@@ -336,6 +390,7 @@ export async function duplicarPendencia(ctx: ApiContext, args: Record<string, un
       sistema: origem.sistema,
       responsavelId: origem.responsavelId,
       criadorId: ctx.usuarioId,
+      equipeId: origem.equipeId,
       prazo: origem.prazo,
       horario: origem.horario,
       prioridade: origem.prioridade,
@@ -346,14 +401,14 @@ export async function duplicarPendencia(ctx: ApiContext, args: Record<string, un
       recorrencia: null
     }
   })
-  if (origem.tags.length) {
+  if (completaOrigem.tags.length) {
     await db.pendenciaTag.createMany({
-      data: origem.tags.map((t) => ({ pendenciaId: nova.id, tagId: t.tagId }))
+      data: completaOrigem.tags.map((t) => ({ pendenciaId: nova.id, tagId: t.tagId }))
     })
   }
-  if (origem.checklist.length) {
+  if (completaOrigem.checklist.length) {
     await db.checklistItem.createMany({
-      data: origem.checklist.map((c) => ({ pendenciaId: nova.id, descricao: c.descricao }))
+      data: completaOrigem.checklist.map((c) => ({ pendenciaId: nova.id, descricao: c.descricao }))
     })
   }
   await registrarHistorico({
@@ -370,8 +425,7 @@ export async function duplicarPendencia(ctx: ApiContext, args: Record<string, un
 export async function concluirPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
 
   // Guarda idempotente: a transição só acontece se ainda não estiver CONCLUIDA.
   // UPDATE único e atômico (com cláusula WHERE) impede que requisições
@@ -429,8 +483,7 @@ export async function concluirPendencia(ctx: ApiContext, args: Record<string, un
 export async function reabrirPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   const novoStatus: PendenciaStatus = (p.status === 'CONCLUIDA' ? 'EM_ANDAMENTO' : p.status) as PendenciaStatus
   // Idempotente: se já está aberta, não reescreve nem gera histórico em duplicidade.
   if (p.status === novoStatus) {
@@ -455,8 +508,7 @@ export async function alterarStatusPendencia(ctx: ApiContext, args: Record<strin
   if (!PENDENCIA_STATUS.includes(status as PendenciaStatus)) throw new AppError('Status inválido')
   if (status === 'CONCLUIDA') return concluirPendencia(ctx, { id })
   const db = getPrisma()
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   // Idempotente: já está no status desejado, não gera novo histórico nem gravação.
   if (p.status === status) {
     const completaAtual = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
@@ -483,8 +535,7 @@ export async function alterarPrazo(ctx: ApiContext, args: Record<string, unknown
   const id = String(args.id || '')
   const prazo = args.prazo ? parseISO(String(args.prazo)) : null
   const horario = args.horario ? String(args.horario) : null
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   await db.pendencia.update({ where: { id }, data: { prazo, horario } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -510,8 +561,7 @@ export async function alterarResponsavel(ctx: ApiContext, args: Record<string, u
   const db = getPrisma()
   const id = String(args.id || '')
   const responsavelId = args.responsavelId ? String(args.responsavelId) : null
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   await db.pendencia.update({ where: { id }, data: { responsavelId } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -538,8 +588,7 @@ export async function alterarPrioridade(ctx: ApiContext, args: Record<string, un
   const id = String(args.id || '')
   const prioridade = String(args.prioridade || '')
   if (!PRIORIDADES.includes(prioridade as Prioridade)) throw new AppError('Prioridade inválida')
-  const p = await db.pendencia.findUnique({ where: { id } })
-  if (!p) throw new AppError('Pendência não encontrada', 404)
+  const p = await carregarComAcesso(ctx, id)
   await db.pendencia.update({ where: { id }, data: { prioridade } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -557,6 +606,7 @@ export async function adicionarTagPendencia(ctx: ApiContext, args: Record<string
   const pendenciaId = String(args.pendenciaId || '')
   const tagId = String(args.tagId || '')
   if (!pendenciaId || !tagId) throw new AppError('Dados inválidos')
+  await carregarComAcesso(ctx, pendenciaId)
   await db.pendenciaTag.upsert({
     where: { pendenciaId_tagId: { pendenciaId, tagId } },
     create: { pendenciaId, tagId },
@@ -577,6 +627,7 @@ export async function removerTagPendencia(ctx: ApiContext, args: Record<string, 
   const db = getPrisma()
   const pendenciaId = String(args.pendenciaId || '')
   const tagId = String(args.tagId || '')
+  await carregarComAcesso(ctx, pendenciaId)
   await db.pendenciaTag.deleteMany({ where: { pendenciaId, tagId } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -594,6 +645,7 @@ export async function adicionarChecklist(ctx: ApiContext, args: Record<string, u
   const pendenciaId = String(args.pendenciaId || '')
   const descricao = String(args.descricao || '')
   if (!descricao.trim()) throw new AppError('Descrição obrigatória')
+  await carregarComAcesso(ctx, pendenciaId)
   const item = await db.checklistItem.create({ data: { pendenciaId, descricao: descricao.trim() } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -610,6 +662,7 @@ export async function toggleChecklist(ctx: ApiContext, args: Record<string, unkn
   const itemId = String(args.itemId || '')
   const item = await db.checklistItem.findUnique({ where: { id: itemId } })
   if (!item) throw new AppError('Item não encontrado', 404)
+  await carregarComAcesso(ctx, item.pendenciaId)
   const concluido = !item.concluido
   await db.checklistItem.update({ where: { id: itemId }, data: { concluido, concluidoEm: concluido ? new Date() : null } })
   await registrarHistorico({
@@ -627,6 +680,7 @@ export async function removerChecklist(ctx: ApiContext, args: Record<string, unk
   const itemId = String(args.itemId || '')
   const item = await db.checklistItem.findUnique({ where: { id: itemId } })
   if (!item) throw new AppError('Item não encontrado', 404)
+  await carregarComAcesso(ctx, item.pendenciaId)
   await db.checklistItem.delete({ where: { id: itemId } })
   await registrarHistorico({
     entidade: 'pendencia',
@@ -643,6 +697,7 @@ export async function adicionarComentario(ctx: ApiContext, args: Record<string, 
   const pendenciaId = String(args.pendenciaId || '')
   const conteudo = String(args.conteudo || '').trim()
   if (!conteudo) throw new AppError('Comentário vazio')
+  await carregarComAcesso(ctx, pendenciaId)
   const p = await db.pendencia.findUnique({ where: { id: pendenciaId } })
   if (!p) throw new AppError('Pendência não encontrada', 404)
   const c = await db.comentario.create({
@@ -677,6 +732,7 @@ export async function excluirComentario(ctx: ApiContext, args: Record<string, un
   const id = String(args.id || '')
   const c = await db.comentario.findUnique({ where: { id } })
   if (!c) throw new AppError('Comentário não encontrado', 404)
+  await carregarComAcesso(ctx, c.pendenciaId)
   if (c.usuarioId !== ctx.usuarioId && !ctx.isAdmin) throw new AppError('Sem permissão', 403)
   await db.comentario.delete({ where: { id } })
   return { ok: true }
@@ -687,5 +743,6 @@ export async function pendenciaMiniatura(ctx: ApiContext, args: Record<string, u
   const id = String(args.id || '')
   const p = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })
   if (!p) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, p.equipeId)
   return serializarPendencia(p as never)
 }

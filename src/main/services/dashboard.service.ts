@@ -1,4 +1,5 @@
 import { getPrisma } from '../db'
+import { temAcessoGlobal } from '../auth'
 import type { ApiContext, DadosDashboard } from '@shared/types'
 import { deepIso, isAtrasada, dataInicioDoDia, dataFimDoDia, addDias } from '../helpers'
 import { pendenciaInclude } from './pendencia.service'
@@ -8,13 +9,17 @@ function conta(lista: Array<{ prazo: Date | null; status: string }>, cond: (praz
   return lista.filter((i) => cond(i.prazo, i.status)).length
 }
 
-export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
+export async function obterDashboard(ctx: ApiContext, args: Record<string, unknown> = {}): Promise<DadosDashboard> {
   const db = getPrisma()
   const hojeInicio = dataInicioDoDia()
   const hojeFim = dataFimDoDia()
   const proxFim = dataFimDoDia(addDias(new Date(), 7))
 
+  const ondeEquipe =
+    !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : temAcessoGlobal(ctx) && args.equipeId ? { equipeId: String(args.equipeId) } : {}
+
   const todas = await db.pendencia.findMany({
+    where: ondeEquipe,
     include: {
       cliente: true,
       projeto: true,
@@ -47,6 +52,7 @@ export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
   const porStatusMap = new Map<string, number>()
   const porCategoriaMap = new Map<string, number>()
   const porTagMap = new Map<string, { tag: unknown; valor: number }>()
+  const porEquipeMap = new Map<string, number>()
 
   for (const p of todas) {
     if (p.status === 'CANCELADA') continue
@@ -58,6 +64,8 @@ export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
     porStatusMap.set(p.status, (porStatusMap.get(p.status) || 0) + 1)
     const cat = p.categoria?.nome || 'Sem categoria'
     porCategoriaMap.set(cat, (porCategoriaMap.get(cat) || 0) + 1)
+    const equipe = p.equipeId || 'sem-equipe'
+    porEquipeMap.set(equipe, (porEquipeMap.get(equipe) || 0) + 1)
     for (const pt of p.tags) {
       const cur = porTagMap.get(pt.tag.id)
       if (cur) cur.valor += 1
@@ -70,6 +78,16 @@ export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
       .map(([label, valor]) => ({ label, valor }))
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 8)
+
+  const equipesIds = [...porEquipeMap.keys()]
+  const equipesResolvidas = equipesIds.length
+    ? await db.equipe.findMany({ where: { id: { in: equipesIds } }, select: { id: true, nome: true } })
+    : []
+  const nomeEquipe = new Map<string, string>(equipesResolvidas.map((e) => [e.id, e.nome]))
+  const porEquipe = [...porEquipeMap.entries()]
+    .map(([id, valor]) => ({ label: nomeEquipe.get(id) || 'Sem equipe', valor }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 8)
 
   const retornos = await db.retorno.findMany({
     where: { status: { in: ['PENDENTE', 'EM_CONTATO', 'AGUARDANDO_CLIENTE'] } },
@@ -111,7 +129,7 @@ export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
     (r) => r.responsavelId === ctx.usuarioId || r.responsavelId === null
   )
 
-  const atividadeRecente = (await historicoGlobal(20)) as never[]
+  const atividadeRecente = (await historicoGlobal(ctx, 20)) as never[]
 
   const dto: DadosDashboard = {
     contadores,
@@ -127,6 +145,7 @@ export async function obterDashboard(ctx: ApiContext): Promise<DadosDashboard> {
     porPrioridade: ordenar(porPrioridadeMap),
     porStatus: ordenar(porStatusMap),
     porCategoria: ordenar(porCategoriaMap),
+    porEquipe,
     porTag: [...porTagMap.values()].sort((a, b) => b.valor - a.valor).slice(0, 12) as never,
     atividadeRecente,
     lembretes: deepIso(lembretes),

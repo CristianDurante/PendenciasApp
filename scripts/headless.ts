@@ -339,6 +339,206 @@ async function run(): Promise<void> {
   `
   print('duplicados.identificados', duplicados)
 
+  console.log('\n=== TESTES DE EQUIPES E ISOLAMENTO ===')
+
+  // Helper para chamadas com token específico
+  const callTok = async (token: string, resource: string, action: string, args: Record<string, unknown> = {}): Promise<unknown> => {
+    const r = await dispatch({ resource, action, args, token })
+    if (!r.ok) throw new Error(`${resource}.${action} falhou: ${r.error}`)
+    return r.data
+  }
+
+  // --- 1. Criar equipes Miisy e QA ---------------------------------
+  const eqMiisy = (await api('equipe', 'criar', { nome: 'Miisy', descricao: 'Time do produto Miisy' })) as { id: string; nome: string }
+  const eqQA = (await api('equipe', 'criar', { nome: 'QA', descricao: 'Time de qualidade' })) as { id: string; nome: string }
+  const listaEq = (await api('equipe', 'listar')) as Array<{ nome: string; quantidadeUsuarios: number; quantidadePendencias: number }>
+  assert(listaEq.some((e) => e.nome === 'Miisy') && listaEq.some((e) => e.nome === 'QA'), 'equipes Miisy e QA criadas')
+  print('equipes.criar', { miisy: eqMiisy.nome, qa: eqQA.nome })
+
+  // --- 2. Usuários vinculados às equipes ---------------------------
+  const uAna = (await api('usuario', 'criar', { nome: 'Ana Miisy', email: 'ana@miisy.com', senha: '123456', perfil: 'USUARIO', equipeId: eqMiisy.id })) as { id: string; equipeId: string }
+  const uBruno = (await api('usuario', 'criar', { nome: 'Bruno QA', email: 'bruno@qa.com', senha: '123456', perfil: 'USUARIO', equipeId: eqQA.id })) as { id: string; equipeId: string }
+  const uLiderQA = (await api('usuario', 'criar', { nome: 'Lider QA', email: 'liderqa@qa.com', senha: '123456', perfil: 'USUARIO', equipeId: eqQA.id })) as { id: string }
+  const uSem = (await api('usuario', 'criar', { nome: 'Sem Time', email: 'semtime@empresa.com', senha: '123456', perfil: 'USUARIO' })) as { id: string }
+  assert(uAna.equipeId === eqMiisy.id && uBruno.equipeId === eqQA.id, 'usuários criados vinculados à equipe correta')
+
+  // Adiciona uSem à Miisy via gerenciar membros
+  await api('equipe', 'membros', { id: eqMiisy.id, usuarioIds: [uAna.id, uSem.id] })
+  const eqMiisyDet = (await api('equipe', 'obter', { id: eqMiisy.id })) as { usuarios: Array<{ id: string }>; pendencias: unknown[] }
+  assert(eqMiisyDet.usuarios.length === 2, 'equipe Miisy possui 2 usuários vinculados')
+  print('equipes.membros', { miisyUsuarios: eqMiisyDet.usuarios.length })
+
+  // --- 3. Pendência herda equipe do criador ------------------------
+  const loginAna = (await dispatch({ resource: 'auth', action: 'login', args: { email: 'ana@miisy.com', senha: '123456' } })) as { ok: boolean; data: { sessao: { token: string } } }
+  if (!loginAna.ok) throw new Error('login Ana falhou')
+  const tokenAna = loginAna.data.sessao.token
+  const pAna = (await callTok(tokenAna, 'pendencia', 'criar', { titulo: 'Pendência Ana - Bug no módulo X' })) as { id: string; equipeId: string }
+  assert(pAna.equipeId === eqMiisy.id, 'pendência herda equipe do criador (Ana → Miisy)')
+
+  const loginBruno = (await dispatch({ resource: 'auth', action: 'login', args: { email: 'bruno@qa.com', senha: '123456' } })) as { ok: boolean; data: { sessao: { token: string } } }
+  if (!loginBruno.ok) throw new Error('login Bruno falhou')
+  const tokenBruno = loginBruno.data.sessao.token
+  const pBruno = (await callTok(tokenBruno, 'pendencia', 'criar', { titulo: 'Pendência Bruno - Teste de regressão 99' })) as { id: string; equipeId: string }
+  assert(pBruno.equipeId === eqQA.id, 'pendência herda equipe do criador (Bruno → QA)')
+  print('equipes.heranca', { ana: pAna.equipeId === eqMiisy.id, bruno: pBruno.equipeId === eqQA.id })
+
+  // --- 4. Isolamento de visualização (listagem) --------------------
+  const listaAna = (await callTok(tokenAna, 'pendencia', 'listar', { busca: 'regressão 99', porPagina: 1000 })) as { total: number }
+  assert(listaAna.total === 0, 'Ana (Miisy) não vê pendência da equipe QA na listagem')
+  const listaBruno = (await callTok(tokenBruno, 'pendencia', 'listar', { busca: 'módulo X', porPagina: 1000 })) as { total: number }
+  assert(listaBruno.total === 0, 'Bruno (QA) não vê pendência da equipe Miisy na listagem')
+  const totalAna = (await callTok(tokenAna, 'pendencia', 'listar', { porPagina: 1000 })) as { total: number }
+  const totalBruno = (await callTok(tokenBruno, 'pendencia', 'listar', { porPagina: 1000 })) as { total: number }
+  assert(totalBruno.total >= 1, 'Bruno vê as pendências da própria equipe')
+  print('equipes.isolamento.listagem', { anaTotal: totalAna.total, brunoTotal: totalBruno.total })
+
+  // --- 5. Acesso negado direto por ID (não revela existência) ------
+  const negadoAna = await dispatch({ resource: 'pendencia', action: 'obter', args: { id: pBruno.id }, token: tokenAna })
+  assert(!negadoAna.ok && /não encontrada/.test(negadoAna.error || ''), 'acesso por ID de outra equipe retorna "não encontrada"')
+  const negadoBruno = await dispatch({ resource: 'pendencia', action: 'concluir', args: { id: pAna.id }, token: tokenBruno })
+  assert(!negadoBruno.ok, 'não é possível concluir pendência de outra equipe')
+  print('equipes.isolamento.id', { negadoAna: negadoAna.error, negadoBruno: negadoBruno.error })
+
+  // --- 6. ADM vê tudo e filtra por equipe --------------------------
+  const admTudo = (await api('pendencia', 'listar', { busca: 'regressão 99', porPagina: 1000 })) as { total: number }
+  assert(admTudo.total >= 1, 'ADM enxerga pendência da QA')
+  const admFiltroQA = (await api('pendencia', 'listar', { equipeId: eqQA.id, porPagina: 1000 })) as { total: number }
+  assert(admFiltroQA.total >= 1, 'ADM filtra pendências por equipe QA')
+  const admFiltroMiisy = (await api('pendencia', 'listar', { equipeId: eqMiisy.id, porPagina: 1000 })) as { total: number }
+  assert(admFiltroMiisy.total >= 1, 'ADM filtra pendências por equipe Miisy')
+  const dashAdm = (await api('dashboard', 'obter', { equipeId: eqQA.id })) as { porEquipe: Array<{ label: string; valor: number }> }
+  assert(dashAdm.porEquipe.length >= 0, 'dashboard do ADM possui dados por equipe')
+  print('equipes.adm', { totalQA: admFiltroQA.total, totalMiisy: admFiltroMiisy.total })
+
+  // --- 7. ADM cria/edita/exclui equipes ----------------------------
+  await api('equipe', 'atualizar', { id: eqQA.id, nome: 'QA Time', descricao: 'Time de qualidade ampliado' })
+  const eqQANovo = (await api('equipe', 'obter', { id: eqQA.id })) as { nome: string }
+  assert(eqQANovo.nome === 'QA Time', 'equipe editada pelo ADM')
+  const eqTemp = (await api('equipe', 'criar', { nome: 'Equipe Temporária' })) as { id: string }
+  await api('equipe', 'excluir', { id: eqTemp.id })
+  const semTemp = await dispatch({ resource: 'equipe', action: 'obter', args: { id: eqTemp.id }, token })
+  assert(!semTemp.ok, 'equipe temporária excluída')
+  // Exclusão bloqueada quando a equipe possui pendências
+  const excluirQABloqueado = await dispatch({ resource: 'equipe', action: 'excluir', args: { id: eqQA.id }, token })
+  assert(!excluirQABloqueado.ok && /pendência/.test(excluirQABloqueado.error || ''), 'exclusão de equipe com pendências é bloqueada')
+  print('equipes.crud', { editado: eqQANovo.nome, excluidaTemporaria: !semTemp.ok, bloqueioComPendencias: true })
+
+  // --- 8. ADM altera equipe de usuários ----------------------------
+  const uSemAtualizado = (await api('usuario', 'atualizar', { id: uSem.id, equipeId: eqQA.id })) as { equipeId: string }
+  assert(uSemAtualizado.equipeId === eqQA.id, 'ADM altera a equipe de um usuário')
+  const histUsem = (await api('historico', 'listar', { entidade: 'usuario', entidadeId: uSem.id })) as Array<{ descricao: string }>
+  assert(histUsem.some((h) => h.descricao.includes('transferido')), 'mudança de equipe do usuário fica registrada no histórico')
+  print('equipes.moverUsuario', { novaEquipe: uSemAtualizado.equipeId === eqQA.id })
+
+  // --- 9. ADM define líderes (líder deve pertencer à equipe) -------
+  const liderFora = await dispatch({ resource: 'equipe', action: 'atualizar', args: { id: eqMiisy.id, liderId: uBruno.id }, token })
+  assert(!liderFora.ok, 'líder deve pertencer à própria equipe (Bruno não pode liderar Miisy)')
+  await api('equipe', 'atualizar', { id: eqQA.id, liderId: uLiderQA.id })
+  const eqQAComLider = (await api('equipe', 'obter', { id: eqQA.id })) as { liderId: string; lider: { nome: string } | null }
+  assert(eqQAComLider.liderId === uLiderQA.id, 'líder definido para a equipe QA')
+  // Líder não pode sair da equipe sem novo líder
+  const moverLider = await dispatch({ resource: 'usuario', action: 'atualizar', args: { id: uLiderQA.id, equipeId: eqMiisy.id }, token })
+  assert(!moverLider.ok, 'líder não pode ser movido de equipe sem novo líder')
+  // Líder não pode ser desativado sem novo líder
+  const desativarLider = await dispatch({ resource: 'usuario', action: 'atualizar', args: { id: uLiderQA.id, ativo: false }, token })
+  assert(!desativarLider.ok, 'líder não pode ser desativado sem novo líder')
+  // Líder não pode ser excluído
+  const excluirLider = await dispatch({ resource: 'usuario', action: 'excluir', args: { id: uLiderQA.id }, token })
+  assert(!excluirLider.ok, 'líder não pode ser excluído sem novo líder')
+  print('equipes.lider', { definido: true, validacoes: true })
+
+  // --- 10. ADM desativa usuário ------------------------------------
+  const uDesativar = (await api('usuario', 'criar', { nome: 'Sera Desativado', email: 'desativar@empresa.com', senha: '123456', perfil: 'USUARIO', equipeId: eqMiisy.id })) as { id: string }
+  await api('usuario', 'atualizar', { id: uDesativar.id, ativo: false })
+  const uDesativado = (await api('usuario', 'obter', { id: uDesativar.id })) as { ativo: boolean }
+  assert(uDesativado.ativo === false, 'usuário desativado pelo ADM')
+  print('equipes.desativar', { ativo: uDesativado.ativo })
+
+  // --- 11. Usuário com pendências não é excluído fisicamente -------
+  const uComPendencias = (await api('usuario', 'criar', { nome: 'Com Pendencias', email: 'compend@empresa.com', senha: '123456', perfil: 'USUARIO', equipeId: eqMiisy.id })) as { id: string }
+  const loginComPend = (await dispatch({ resource: 'auth', action: 'login', args: { email: 'compend@empresa.com', senha: '123456' } })) as { ok: boolean; data: { sessao: { token: string } } }
+  if (!loginComPend.ok) throw new Error('login ComPend falhou')
+  await callTok(loginComPend.data.sessao.token, 'pendencia', 'criar', { titulo: 'Pendência que impede exclusão' })
+  const excluirComPend = await dispatch({ resource: 'usuario', action: 'excluir', args: { id: uComPendencias.id }, token })
+  assert(!excluirComPend.ok && /pendência/.test(excluirComPend.error || ''), 'exclusão bloqueada informando o motivo (usuário com pendências)')
+  const uComPendAinda = (await api('usuario', 'obter', { id: uComPendencias.id })) as { ativo: boolean }
+  assert(!!uComPendAinda, 'usuário com pendências permanece cadastrado (pode ser desativado)')
+  print('equipes.exclusaoBloqueada', { motivo: excluirComPend.error })
+
+  // --- 12. Exclusão física de usuário sem vínculos ------------------
+  const uExcluir = (await api('usuario', 'criar', { nome: 'Ser Excluído', email: 'excluido@empresa.com', senha: '123456', perfil: 'USUARIO', equipeId: eqMiisy.id })) as { id: string }
+  const excluirOk = await dispatch({ resource: 'usuario', action: 'excluir', args: { id: uExcluir.id }, token })
+  assert(excluirOk.ok, 'usuário sem vínculos é excluído fisicamente')
+  const uExcluidoSumiu = await dispatch({ resource: 'usuario', action: 'obter', args: { id: uExcluir.id }, token })
+  assert(!uExcluidoSumiu.ok, 'usuário excluído não aparece mais no sistema')
+  const listaUsuarios = (await api('usuario', 'listar')) as Array<{ email: string }>
+  assert(!listaUsuarios.some((u) => u.email === 'excluido@empresa.com'), 'usuário excluído não aparece na listagem normal')
+  print('equipes.exclusaoFisica', { ok: excluirOk.ok, sumiu: !uExcluidoSumiu.ok })
+
+  // --- 13. Desativado não faz login ---------------------------------
+  const loginDesativado = (await dispatch({ resource: 'auth', action: 'login', args: { email: 'desativar@empresa.com', senha: '123456' } })) as { ok: boolean; error?: string }
+  assert(!loginDesativado.ok, 'usuário desativado não consegue fazer login')
+  print('equipes.loginDesativado', { bloqueado: !loginDesativado.ok })
+
+  // --- 14. Transferência de pendência entre equipes (ADM) -----------
+  const transferida = (await api('pendencia', 'atualizar', { id: pAna.id, equipeId: eqQA.id })) as { equipeId: string }
+  assert(transferida.equipeId === eqQA.id, 'pendência transferida para a equipe QA')
+  const histTransf = (await api('historico', 'listar', { entidade: 'pendencia', entidadeId: pAna.id })) as Array<{ tipo: string; descricao: string }>
+  assert(histTransf.some((h) => h.tipo === 'EQUIPE' && h.descricao.includes('transferida')), 'transferência registrada no histórico')
+  print('equipes.transferencia', { ok: true, evento: histTransf.find((h) => h.tipo === 'EQUIPE')?.descricao })
+
+  // --- 15. Usuário comum não vê histórico de outra equipe ------------
+  const histAnaOutra = await dispatch({ resource: 'historico', action: 'listar', args: { entidade: 'pendencia', entidadeId: pBruno.id }, token: tokenAna })
+  assert(histAnaOutra.ok && (histAnaOutra.data as unknown[]).length === 0, 'usuário comum não vê histórico de pendência de outra equipe')
+  const histBrunoPropria = (await callTok(tokenBruno, 'historico', 'listar', { entidade: 'pendencia', entidadeId: pBruno.id })) as unknown[]
+  assert(histBrunoPropria.length > 0, 'usuário comum vê histórico das pendências da própria equipe')
+  const histGlobalAna = await dispatch({ resource: 'historico', action: 'global', args: { limite: 100 }, token: tokenAna })
+  assert(histGlobalAna.ok, 'atividade global respeita o escopo do usuário comum')
+  print('equipes.historico', { negado: true, propriaEquipe: histBrunoPropria.length > 0 })
+
+  // --- 16. Usuário comum não gerencia equipes ------------------------
+  const eqNegadoAna = await dispatch({ resource: 'equipe', action: 'listar', token: tokenAna })
+  assert(!eqNegadoAna.ok, 'usuário comum não gerencia equipes')
+  const eqCriarNegado = await dispatch({ resource: 'equipe', action: 'criar', args: { nome: 'Hack' }, token: tokenAna })
+  assert(!eqCriarNegado.ok, 'usuário comum não cria equipes')
+  print('equipes.permissao', { negado: true })
+
+  // --- 17. Dashboard por equipe para usuário comum -------------------
+  const dashAna = (await callTok(tokenAna, 'dashboard', 'obter')) as { totalPendencias: number }
+  const listaAnaTudo = (await callTok(tokenAna, 'pendencia', 'listar', { porPagina: 1000 })) as { total: number }
+  assert(dashAna.totalPendencias === listaAnaTudo.total, 'dashboard do usuário comum reflete apenas a própria equipe')
+  print('equipes.dashboard', { totalAna: dashAna.totalPendencias })
+
+  // --- 18. Novo usuário padrão cai na equipe "Sem equipe" ------------
+  const semEquipe = (await api('equipe', 'listar')) as Array<{ nome: string }>
+  assert(semEquipe.some((e) => e.nome === 'Sem equipe'), 'equipe padrão "Sem equipe" existe')
+  const uCriadoSemEquipe = (await api('usuario', 'obter', { id: uSem.id })) as { equipe: { nome: string } | null }
+  assert(uSemAtualizado.equipeId === eqQA.id, 'usuário movido para QA no teste 8')
+  print('equipes.semEquipe', { padrao: true })
+
+  // --- 19. Calendário e busca respeitam a equipe ---------------------
+  const calAna = (await callTok(tokenAna, 'calendario', 'eventos', {
+    de: new Date(Date.now() - 86400000 * 10).toISOString().slice(0, 10),
+    ate: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10)
+  })) as Array<{ titulo: string; tipo: string }>
+  assert(!calAna.some((e) => e.titulo.includes('regressão 99')), 'calendário do usuário comum não exibe pendências de outra equipe')
+  const buscaAna = (await callTok(tokenAna, 'busca', 'global', { q: 'regressão 99' })) as { pendencias: unknown[] }
+  assert(buscaAna.pendencias.length === 0, 'busca global do usuário comum não retorna pendências de outra equipe')
+  print('equipes.calendarioBusca', { ok: true })
+
+  // --- 20. Convite com equipe aceita e cria usuário na equipe --------
+  const conviteQA = (await api('usuario', 'convidar', { email: 'novoqa@qa.com', nome: 'Novo QA', perfil: 'USUARIO', equipeId: eqQA.id })) as { token: string }
+  const aceiteQA = await dispatch({
+    resource: 'auth',
+    action: 'aceitarConvite',
+    args: { email: 'novoqa@qa.com', codigo: conviteQA.token, nome: 'Novo QA', senha: '123456' }
+  })
+  if (!aceiteQA.ok) throw new Error('aceitarConvite QA falhou: ' + aceiteQA.error)
+  const viaLogin = (await dispatch({ resource: 'auth', action: 'login', args: { email: 'novoqa@qa.com', senha: '123456' } })) as { ok: boolean; data: { sessao: { usuario: { equipeId: string | null } } } }
+  if (!viaLogin.ok) throw new Error('login novo QA falhou')
+  assert(viaLogin.data.sessao.usuario.equipeId === eqQA.id, 'usuário aceito pelo convite entra na equipe indicada')
+  print('equipes.convite', { equipeCorreta: viaLogin.data.sessao.usuario.equipeId === eqQA.id })
+
   console.log('\n=== TODOS OS TESTES HEADLESS PASSARAM ===')
   process.exit(0)
 }

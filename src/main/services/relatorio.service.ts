@@ -1,4 +1,5 @@
 import { getPrisma } from '../db'
+import { temAcessoGlobal } from '../auth'
 import type { ApiContext, RelatorioPendencia } from '@shared/types'
 import { deepIso, isAtrasada } from '../helpers'
 
@@ -9,8 +10,11 @@ function diasEntre(a: Date, b: Date): number {
   return Math.round((fim.getTime() - inicio.getTime()) / umDia)
 }
 
-async function carregarPendencias(db: ReturnType<typeof getPrisma>): Promise<unknown[]> {
+async function carregarPendencias(ctx: ApiContext): Promise<unknown[]> {
+  const db = getPrisma()
+  const ondeEquipe = !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : {}
   return db.pendencia.findMany({
+    where: ondeEquipe,
     include: {
       cliente: true,
       projeto: true,
@@ -21,9 +25,9 @@ async function carregarPendencias(db: ReturnType<typeof getPrisma>): Promise<unk
   })
 }
 
-export async function relatorioGeral(_ctx: ApiContext): Promise<unknown> {
+export async function relatorioGeral(ctx: ApiContext): Promise<unknown> {
   const db = getPrisma()
-  const todas = await carregarPendencias(db)
+  const todas = await carregarPendencias(ctx)
   const linhas: RelatorioPendencia[] = todas.map((p: any) => {
     const concluidaEm = p.concluidaEm
     const dias = p.status === 'CONCLUIDA' && p.concluidaEm ? diasEntre(p.criadoEm, p.concluidaEm) : null
@@ -64,10 +68,10 @@ export async function relatorioGeral(_ctx: ApiContext): Promise<unknown> {
   }
 }
 
-export async function relatorioAgregado(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+export async function relatorioAgregado(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const grupo = String(args.grupo || 'cliente')
-  const todas = await carregarPendencias(db)
+  const todas = await carregarPendencias(ctx)
   const map = new Map<string, { abertas: number; concluidas: number; atrasadas: number; total: number }>()
   const add = (chave: string, p: any) => {
     const atual = map.get(chave) || { abertas: 0, concluidas: 0, atrasadas: 0, total: 0 }
@@ -104,8 +108,8 @@ export async function relatorioAgregado(_ctx: ApiContext, args: Record<string, u
   return deepIso({ grupo, itens })
 }
 
-export async function relatorioCsv(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
-  const rel = (await relatorioGeral(_ctx)) as { linhas: RelatorioPendencia[] }
+export async function relatorioCsv(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const rel = (await relatorioGeral(ctx)) as { linhas: RelatorioPendencia[] }
   const linhas = rel.linhas
   const cabecalho = [
     'Título',
@@ -148,9 +152,9 @@ export async function relatorioCsv(_ctx: ApiContext, args: Record<string, unknow
   return { csv, nomeArquivo: `relatorio-pendencias-${timestamp}.csv` }
 }
 
-export async function dadosParaPdf(_ctx: ApiContext): Promise<unknown> {
+export async function dadosParaPdf(ctx: ApiContext): Promise<unknown> {
   const db = getPrisma()
-  const todas = await carregarPendencias(db)
-  const resumo = await relatorioGeral(_ctx)
+  const todas = await carregarPendencias(ctx)
+  const resumo = await relatorioGeral(ctx)
   return deepIso({ linhas: (resumo as { linhas: RelatorioPendencia[] }).linhas, total: todas.length })
 }

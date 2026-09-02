@@ -23,7 +23,10 @@ export function PendenciasPage(): ReactNode {
   const usuarios = useCatalogoStore((s) => s.usuarios)
   const categorias = useCatalogoStore((s) => s.categorias)
   const tags = useCatalogoStore((s) => s.tags)
+  const equipes = useCatalogoStore((s) => s.equipes)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
+  const sessao = useAppStore((s) => s.sessao)
+  const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
 
   useEffect(() => {
     void carregarCatalogo()
@@ -49,6 +52,7 @@ export function PendenciasPage(): ReactNode {
   const [prazoAte, setPrazoAte] = useState('')
   const [atrasadas, setAtrasadas] = useState(params.get('status') === 'atrasadas')
   const [semResponsavel, setSemResponsavel] = useState(params.get('semResponsavel') === '1')
+  const [equipeId, setEquipeId] = useState('')
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [selecionadas, setSelecionadas] = useState<string[]>([])
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
@@ -76,6 +80,7 @@ export function PendenciasPage(): ReactNode {
       responsavelId: responsavelId || undefined,
       categoriaId: categoriaId || undefined,
       tags: tagsSel.length ? tagsSel : undefined,
+      equipeId: ehAdmin ? (equipeId || undefined) : undefined,
       prazoDe: prazoDe || undefined,
       prazoAte: prazoAte || undefined,
       atrasadas,
@@ -84,7 +89,7 @@ export function PendenciasPage(): ReactNode {
       prazoHoje,
       prazoProximas
     } as never)
-  }, [status, prioridades, clienteId, projetoId, responsavelId, categoriaId, tagsSel, prazoDe, prazoAte, atrasadas, semResponsavel, buscaDebounced, prazoHoje, prazoProximas, atualizarFiltro])
+  }, [status, prioridades, clienteId, projetoId, responsavelId, categoriaId, tagsSel, prazoDe, prazoAte, atrasadas, semResponsavel, buscaDebounced, prazoHoje, prazoProximas, equipeId, ehAdmin, atualizarFiltro])
 
   useEffect(() => {
     if (dataVersao > 0) void recarregar()
@@ -154,6 +159,7 @@ export function PendenciasPage(): ReactNode {
     setResponsavelId('')
     setCategoriaId('')
     setTagsSel([])
+    setEquipeId('')
     setPrazoDe('')
     setPrazoAte('')
     setAtrasadas(false)
@@ -162,7 +168,7 @@ export function PendenciasPage(): ReactNode {
 
   const temFiltroAtivo =
     !!busca || status.length > 0 || prioridades.length > 0 || !!clienteId || !!projetoId || !!responsavelId || !!categoriaId ||
-    tagsSel.length > 0 || !!prazoDe || !!prazoAte || atrasadas || semResponsavel
+    (ehAdmin && !!equipeId) || tagsSel.length > 0 || !!prazoDe || !!prazoAte || atrasadas || semResponsavel
 
   return (
     <div className="flex h-full flex-col p-4">
@@ -182,6 +188,14 @@ export function PendenciasPage(): ReactNode {
         >
           <Filter className="h-4 w-4" /> Filtros {temFiltroAtivo && <span className="rounded-full bg-brand-100 px-1.5 text-[11px] text-brand-700 dark:bg-brand-900 dark:text-brand-300">•</span>}
         </button>
+        {ehAdmin && (
+          <SelectOpcoes
+            value={equipeId}
+            onChange={setEquipeId}
+            opcoes={[{ valor: '', rotulo: 'Equipe: Todas' }, ...equipes.map((eq) => ({ valor: eq.id, rotulo: `Equipe: ${eq.nome}` }))]}
+            className="w-48"
+          />
+        )}
         {selecionadas.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">

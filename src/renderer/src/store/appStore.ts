@@ -36,7 +36,7 @@ interface AppState {
   abrirPendencia: (p: Pendencia | null) => void
   setPainelBusca: (v: boolean) => void
   setPainelNotificacoes: (v: boolean) => void
-  carregarDashboard: (forcar?: boolean) => Promise<void>
+  carregarDashboard: (forcar?: boolean, equipeId?: string) => Promise<void>
   atualizarPendenciaNoState: (p: Pendencia) => void
   notificarMudanca: () => void
 }
@@ -121,11 +121,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPainelBusca: (v) => set({ painelBusca: v }),
   setPainelNotificacoes: (v) => set({ painelNotificacoes: v }),
 
-  carregarDashboard: async (forcar = false) => {
+  carregarDashboard: async (forcar = false, equipeId?: string) => {
     if (get().dashboard && !forcar) return
     set({ dashboardLoading: true })
     try {
-      const dados = await call<DadosDashboard>('dashboard', 'obter')
+      const dados = await call<DadosDashboard>('dashboard', 'obter', equipeId ? { equipeId } : {})
       set({ dashboard: dados, dashboardLoading: false })
     } catch {
       set({ dashboardLoading: false })

@@ -43,6 +43,7 @@ function toUsuario(u: {
   avatar: string | null
   ativo: boolean
   empresaId: string | null
+  equipeId: string | null
   ultimoAcesso: Date | null
   criadoEm: Date
   atualizadoEm: Date
@@ -57,6 +58,7 @@ function toUsuario(u: {
     avatar: u.avatar,
     ativo: u.ativo,
     empresaId: u.empresaId,
+    equipeId: u.equipeId,
     ultimoAcesso: u.ultimoAcesso ? u.ultimoAcesso.toISOString() : null,
     criadoEm: u.criadoEm.toISOString(),
     atualizadoEm: u.atualizadoEm.toISOString()
@@ -134,6 +136,7 @@ export async function aceitarConvite(
       cargo: convite.cargo,
       telefone: convite.telefone,
       empresaId: convite.empresaId,
+      equipeId: convite.equipeId || null,
       ativo: true
     }
   })
@@ -156,6 +159,7 @@ export async function validarToken(token: string): Promise<ApiContext> {
     usuarioId: sessao.usuario.id,
     perfil: sessao.usuario.perfil as Perfil,
     empresaId: sessao.usuario.empresaId,
+    equipeId: sessao.usuario.equipeId,
     isAdmin: sessao.usuario.perfil === 'ADMIN'
   }
 }
@@ -173,6 +177,25 @@ export function requireRoles(ctx: ApiContext, perfis: Perfil[]): void {
 
 export function requireAdminOrGestor(ctx: ApiContext): void {
   requireRoles(ctx, ['ADMIN', 'GESTOR'])
+}
+
+// Perfis com visão global (todas as equipes/pendências): ADMIN e GESTOR.
+export function temAcessoGlobal(ctx: ApiContext): boolean {
+  return ctx.isAdmin || ctx.perfil === 'GESTOR'
+}
+
+// Valida se o usuário pode acessar uma pendência da equipe informada.
+// Para usuários comuns (USUARIO/LÍDER), o acesso é restrito à própria equipe.
+export function validarAcessoEquipe(ctx: ApiContext, equipeId: string | null): boolean {
+  if (temAcessoGlobal(ctx)) return true
+  return ctx.equipeId !== null && equipeId !== null && ctx.equipeId === equipeId
+}
+
+// Lança "não encontrada" para não revelar a existência de registros de outras equipes.
+export function exigirAcessoEquipe(ctx: ApiContext, equipeId: string | null): void {
+  if (!validarAcessoEquipe(ctx, equipeId)) {
+    throw new AppError('Pendência não encontrada', 404)
+  }
 }
 
 export async function obterUsuarioPorId(id: string): Promise<Usuario | null> {

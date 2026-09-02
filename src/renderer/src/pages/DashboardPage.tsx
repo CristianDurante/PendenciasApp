@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   TriangleAlert,
@@ -9,12 +9,13 @@ import {
   CheckCircle2,
   UserX,
   ListTodo,
-  RefreshCw
+  RefreshCw,
+  Users2
 } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useCatalogoStore } from '../store/catalogoStore'
 import { cn } from '../lib/format'
-import { Loading, Button } from '../components/ui'
+import { Loading, Button, SelectOpcoes } from '../components/ui'
 
 function CardContador({ rotulo, valor, cor, icone, href }: { rotulo: string; valor: number; cor: string; icone: ReactNode; href: string }): ReactNode {
   return (
@@ -38,17 +39,20 @@ export function DashboardPage(): ReactNode {
   const dataVersao = useAppStore((s) => s.dataVersao)
   const carregarNotificacoes = useCatalogoStore((s) => s.carregarNotificacoes)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
+  const equipes = useCatalogoStore((s) => s.equipes)
   const sessao = useAppStore((s) => s.sessao)
+  const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
+  const [equipeFiltro, setEquipeFiltro] = useState('')
 
   useEffect(() => {
-    void carregarDashboard(true)
+    void carregarDashboard(true, ehAdmin ? (equipeFiltro || undefined) : undefined)
     void carregarNotificacoes()
     void carregarCatalogo()
-  }, [carregarDashboard, carregarNotificacoes, carregarCatalogo])
+  }, [carregarDashboard, carregarNotificacoes, carregarCatalogo, equipeFiltro, ehAdmin])
 
   useEffect(() => {
-    if (dataVersao > 0) void carregarDashboard(true)
-  }, [dataVersao, carregarDashboard])
+    if (dataVersao > 0) void carregarDashboard(true, ehAdmin ? (equipeFiltro || undefined) : undefined)
+  }, [dataVersao, carregarDashboard, equipeFiltro, ehAdmin])
 
   const nome = sessao?.usuario.nome?.split(' ')[0] || ''
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -87,9 +91,19 @@ export function DashboardPage(): ReactNode {
 
   return (
     <div className="h-full overflow-y-auto p-4">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">{nome ? `Olá, ${nome}` : 'Olá'}</h2>
-        <p className="text-sm capitalize text-slate-500 dark:text-slate-400">{hoje}</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{nome ? `Olá, ${nome}` : 'Olá'}</h2>
+          <p className="text-sm capitalize text-slate-500 dark:text-slate-400">{hoje}</p>
+        </div>
+        {ehAdmin && (
+          <SelectOpcoes
+            value={equipeFiltro}
+            onChange={setEquipeFiltro}
+            opcoes={[{ valor: '', rotulo: 'Equipe: Todas' }, ...equipes.map((eq) => ({ valor: eq.id, rotulo: `Equipe: ${eq.nome}` }))]}
+            className="w-52"
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -97,6 +111,28 @@ export function DashboardPage(): ReactNode {
           <CardContador key={c.rotulo} {...c} />
         ))}
       </div>
+
+      {ehAdmin && dashboard.porEquipe && dashboard.porEquipe.length > 0 && (
+        <div className="card mt-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
+            <Users2 className="h-4 w-4 text-brand-500" /> Pendências por equipe
+          </h3>
+          <div className="space-y-2">
+            {dashboard.porEquipe.map((e) => {
+              const max = Math.max(...dashboard.porEquipe.map((x) => x.valor), 1)
+              return (
+                <div key={e.label} className="flex items-center gap-3">
+                  <span className="w-40 truncate text-sm text-slate-600 dark:text-slate-300">{e.label}</span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                    <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.round((e.valor / max) * 100)}%` }} />
+                  </div>
+                  <span className="w-8 text-right text-sm font-semibold text-slate-700 dark:text-slate-200">{e.valor}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

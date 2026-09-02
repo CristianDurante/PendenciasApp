@@ -27,6 +27,23 @@ model Empresa {
   @@map("empresas")
 }
 
+model Equipe {
+  id          String   @id @default(cuid())
+  nome        String
+  descricao   String?
+  liderId     String?
+  ativo       Boolean  @default(true)
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  lider      Usuario?    @relation("EquipeLider", fields: [liderId], references: [id], onDelete: SetNull)
+  usuarios   Usuario[]   @relation("EquipeUsuarios")
+  pendencias Pendencia[]
+
+  @@index([liderId])
+  @@map("equipes")
+}
+
 model Usuario {
   id           String   @id @default(cuid())
   nome         String
@@ -38,11 +55,14 @@ model Usuario {
   avatar       String?
   ativo        Boolean  @default(true)
   empresaId    String?
+  equipeId     String?
   ultimoAcesso DateTime?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   empresa      Empresa?        @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  equipe       Equipe?         @relation("EquipeUsuarios", fields: [equipeId], references: [id], onDelete: SetNull)
+  equipesLider Equipe[]        @relation("EquipeLider")
   pendenciasCriadas Pendencia[] @relation("PendenciaCriador")
   pendenciasResponsavel Pendencia[] @relation("PendenciaResponsavel")
   comentarios  Comentario[]
@@ -56,6 +76,7 @@ model Usuario {
   projetos     Projeto[]    @relation("ProjetoResponsavel")
   historicos   Historico[]
 
+  @@index([equipeId])
   @@map("usuarios")
 }
 
@@ -140,6 +161,7 @@ model Pendencia {
   sistema       String?
   responsavelId String?
   criadorId     String
+  equipeId      String?
   criadoEm      DateTime @default(now())
   prazo         DateTime?
   horario       String?
@@ -157,6 +179,7 @@ model Pendencia {
   cliente    Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   projeto    Projeto?        @relation(fields: [projetoId], references: [id], onDelete: SetNull)
   categoria  Categoria?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  equipe     Equipe?         @relation(fields: [equipeId], references: [id], onDelete: SetNull)
   tags       PendenciaTag[]
   comentarios Comentario[]
   anexos     Anexo[]
@@ -168,6 +191,7 @@ model Pendencia {
   @@index([clienteId])
   @@index([projetoId])
   @@index([responsavelId])
+  @@index([equipeId])
   @@map("pendencias")
 }
 
@@ -358,6 +382,7 @@ model Convite {
   cargo       String?
   telefone    String?
   empresaId   String?
+  equipeId    String?
   criadoPorId String
   criadoEm    DateTime  @default(now())
   expiraEm    DateTime

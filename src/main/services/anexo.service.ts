@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { getPrisma, resolveDataDir } from '../db'
-import { AppError } from '../auth'
+import { AppError, exigirAcessoEquipe } from '../auth'
 import { EXTENSOES_ANEXO, TAMANHO_MAX_ANEXO } from '@shared/constants'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
@@ -25,9 +25,12 @@ function validarExtensao(nome: string): string {
   return ext
 }
 
-export async function listarAnexos(args: Record<string, unknown>): Promise<unknown> {
+export async function listarAnexos(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const pendenciaId = String(args.pendenciaId || '')
+  const p = await db.pendencia.findUnique({ where: { id: pendenciaId }, select: { equipeId: true } })
+  if (!p) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, p.equipeId)
   const itens = await db.anexo.findMany({
     where: { pendenciaId },
     include: { usuario: { select: { id: true, nome: true, avatar: true } } },
@@ -44,6 +47,7 @@ export async function criarAnexo(ctx: ApiContext, args: Record<string, unknown>)
   const db = getPrisma()
   const pendencia = await db.pendencia.findUnique({ where: { id: parsed.pendenciaId } })
   if (!pendencia) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, pendencia.equipeId)
   const ext = validarExtensao(parsed.nomeOriginal)
   const dir = join(resolveDataDir(), 'anexos', parsed.pendenciaId)
   await mkdir(dir, { recursive: true })
@@ -79,6 +83,9 @@ export async function obterConteudoAnexo(ctx: ApiContext, args: Record<string, u
   const id = String(args.id || '')
   const a = await db.anexo.findUnique({ where: { id } })
   if (!a) throw new AppError('Anexo não encontrado', 404)
+  const pendencia = await db.pendencia.findUnique({ where: { id: a.pendenciaId }, select: { equipeId: true } })
+  if (!pendencia) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, pendencia.equipeId)
   const caminho = join(resolveDataDir(), 'anexos', a.pendenciaId, a.arquivo)
   try {
     const buffer = await readFile(caminho)
@@ -93,6 +100,9 @@ export async function excluirAnexo(ctx: ApiContext, args: Record<string, unknown
   const id = String(args.id || '')
   const a = await db.anexo.findUnique({ where: { id } })
   if (!a) throw new AppError('Anexo não encontrado', 404)
+  const pendencia = await db.pendencia.findUnique({ where: { id: a.pendenciaId }, select: { equipeId: true } })
+  if (!pendencia) throw new AppError('Pendência não encontrada', 404)
+  exigirAcessoEquipe(ctx, pendencia.equipeId)
   if (a.usuarioId !== ctx.usuarioId && !ctx.isAdmin) throw new AppError('Sem permissão', 403)
   const caminho = join(resolveDataDir(), 'anexos', a.pendenciaId, a.arquivo)
   try {

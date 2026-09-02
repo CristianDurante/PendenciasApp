@@ -1,16 +1,20 @@
 import { getPrisma } from '../db'
+import { temAcessoGlobal } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
 
-export async function buscaGlobal(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const termo = String(args.q || '').trim().toLowerCase()
   if (termo.length < 1) return { vazio: true }
   const limite = 20
 
+  const ondeEquipe = !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : {}
+
   const [pendencias, clientes, projetos, notas, compromissos, retornos, tags, comentarios] = await Promise.all([
     db.pendencia.findMany({
       where: {
+        ...ondeEquipe,
         OR: [
           { titulo: { contains: termo } },
           { descricao: { contains: termo } },
@@ -67,7 +71,10 @@ export async function buscaGlobal(_ctx: ApiContext, args: Record<string, unknown
     }),
     db.tag.findMany({ where: { nome: { contains: termo } }, orderBy: { nome: 'asc' }, take: limite }),
     db.comentario.findMany({
-      where: { conteudo: { contains: termo } },
+      where: {
+        conteudo: { contains: termo },
+        ...(ondeEquipe ? { pendencia: { equipeId: ctx.equipeId as string } } : {})
+      },
       include: { pendencia: { select: { id: true, titulo: true } }, usuario: { select: { id: true, nome: true } } },
       orderBy: { criadoEm: 'desc' },
       take: limite

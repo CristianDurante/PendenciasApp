@@ -4,6 +4,7 @@ import { PRIORIDADES, PENDENCIA_STATUS, RECORRENCIA_OPCOES, DEPARTAMENTOS_SUGERI
 import { Field, Input, Select, Textarea } from '../ui'
 import { TagPicker } from './TagPicker'
 import { useCatalogoStore } from '../../store/catalogoStore'
+import { useAppStore } from '../../store/appStore'
 import { dataParaInput } from '../../lib/format'
 
 export interface PendenciaFormData {
@@ -22,6 +23,7 @@ export interface PendenciaFormData {
   tags: string[]
   recorrencia: string
   observacoes: string
+  equipeId: string
 }
 
 const estadoInicial: PendenciaFormData = {
@@ -39,7 +41,8 @@ const estadoInicial: PendenciaFormData = {
   status: 'A_FAZER',
   tags: [],
   recorrencia: '',
-  observacoes: ''
+  observacoes: '',
+  equipeId: ''
 }
 
 export function dadosDePendencia(p: Pendencia): PendenciaFormData {
@@ -58,7 +61,8 @@ export function dadosDePendencia(p: Pendencia): PendenciaFormData {
     status: p.status,
     tags: (p.tags || []).map((t) => t.tagId),
     recorrencia: p.recorrencia ? (JSON.parse(p.recorrencia) as { tipo: string }).tipo : '',
-    observacoes: p.observacoes || ''
+    observacoes: p.observacoes || '',
+    equipeId: p.equipeId || ''
   }
 }
 
@@ -75,6 +79,9 @@ export function PendenciaForm({
   const projetos = useCatalogoStore((s) => s.projetos)
   const categorias = useCatalogoStore((s) => s.categorias)
   const usuarios = useCatalogoStore((s) => s.usuarios)
+  const equipes = useCatalogoStore((s) => s.equipes)
+  const sessao = useAppStore((s) => s.sessao)
+  const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
 
   const set = (campo: keyof PendenciaFormData, valor: string | string[]): void => {
     aoMudar({ ...dados, [campo]: valor })
@@ -130,6 +137,19 @@ export function PendenciaForm({
           ))}
         </Select>
       </Field>
+
+      {ehAdmin && (
+        <Field label="Equipe">
+          <Select value={dados.equipeId} onChange={(e) => set('equipeId', e.target.value)}>
+            <option value="">Sem equipe</option>
+            {equipes.map((eq) => (
+              <option key={eq.id} value={eq.id}>
+                {eq.nome}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <Field label="Sistema">
         <Input value={dados.sistema} onChange={(e) => set('sistema', e.target.value)} placeholder="Ex.: ERP, CRM..." />

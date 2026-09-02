@@ -1,18 +1,21 @@
 import { getPrisma } from '../db'
+import { temAcessoGlobal } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso, dataInicioDoDia, dataFimDoDia } from '../helpers'
 import { parseISO } from 'date-fns'
 
-export async function eventosCalendario(_ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+export async function eventosCalendario(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const de = parseISO(String(args.de || ''))
   const ate = parseISO(String(args.ate || ''))
   const deInicio = dataInicioDoDia(de)
   const ateFim = dataFimDoDia(ate)
 
+  const ondeEquipe = !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : {}
+
   const [pendencias, compromissos, retornos] = await Promise.all([
     db.pendencia.findMany({
-      where: { prazo: { gte: deInicio, lte: ateFim } },
+      where: { ...ondeEquipe, prazo: { gte: deInicio, lte: ateFim } },
       include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true } }, tags: { include: { tag: true } } },
       orderBy: { prazo: 'asc' }
     }),
