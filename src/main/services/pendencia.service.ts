@@ -199,9 +199,14 @@ export async function criarPendencia(ctx: ApiContext, args: Record<string, unkno
   const parsed = PendenciaCreateSchema.parse(args)
   // Equipe da pendência: herda a equipe do usuário criador. Acesso global (ADM/GESTOR)
   // pode escolher a equipe no momento da criação; usuário comum fica na própria equipe.
-  const equipeId = temAcessoGlobal(ctx)
+  const equipeEscolhida = temAcessoGlobal(ctx)
     ? parsed.equipeId || ctx.equipeId || EQUIPE_SEM_EQUIPE_ID
     : ctx.equipeId || EQUIPE_SEM_EQUIPE_ID
+  const responsavel = parsed.responsavelId
+    ? await db.usuario.findUnique({ where: { id: parsed.responsavelId }, select: { equipeId: true } })
+    : null
+  if (parsed.responsavelId && !responsavel) throw new AppError('Responsável não encontrado', 404)
+  const equipeId = responsavel?.equipeId || equipeEscolhida
   const p = await db.pendencia.create({
     data: {
       titulo: parsed.titulo,
@@ -288,6 +293,22 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
       }
     } else if (parsed.equipeId !== anterior.equipeId) {
       throw new AppError('Você não pode transferir esta pendência de equipe', 403)
+    }
+  }
+  if (parsed.responsavelId !== undefined) {
+    const responsavel = parsed.responsavelId
+      ? await db.usuario.findUnique({ where: { id: parsed.responsavelId }, select: { equipeId: true } })
+      : null
+    if (parsed.responsavelId && !responsavel) throw new AppError('Responsável não encontrado', 404)
+    const equipeDoResponsavel = responsavel?.equipeId || null
+    if (equipeDoResponsavel && equipeDoResponsavel !== anterior.equipeId) {
+      const origem = anterior.equipeId ? await db.equipe.findUnique({ where: { id: anterior.equipeId } }) : null
+      const destino = await db.equipe.findUnique({ where: { id: equipeDoResponsavel } })
+      data.equipeId = equipeDoResponsavel
+      transferenciaEquipe = {
+        origemNome: origem?.nome || 'Sem equipe',
+        destinoNome: destino?.nome || 'Sem equipe'
+      }
     }
   }
   if (parsed.status !== undefined) data.status = parsed.status

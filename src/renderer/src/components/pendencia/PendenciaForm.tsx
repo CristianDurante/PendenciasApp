@@ -87,6 +87,15 @@ export function PendenciaForm({
     aoMudar({ ...dados, [campo]: valor })
   }
 
+  const aoSelecionarResponsavel = (responsavelId: string): void => {
+    const responsavel = usuarios.find((usuario) => usuario.id === responsavelId)
+    aoMudar({
+      ...dados,
+      responsavelId,
+      equipeId: responsavel?.equipeId || ''
+    })
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <Field label="Título" obrigatorio className="md:col-span-2">
@@ -128,11 +137,11 @@ export function PendenciaForm({
       </Field>
 
       <Field label="Responsável">
-        <Select value={dados.responsavelId} onChange={(e) => set('responsavelId', e.target.value)}>
+        <Select value={dados.responsavelId} onChange={(e) => aoSelecionarResponsavel(e.target.value)}>
           <option value="">Sem responsável</option>
           {usuarios.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.nome}
+              {u.nome}{u.equipe?.nome ? ` - ${u.equipe.nome}` : ''}
             </option>
           ))}
         </Select>
