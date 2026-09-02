@@ -49,7 +49,9 @@ export async function enviarEmailRecuperacao(
       console.error('[mailer] falha ao enviar e-mail:', e)
     }
   }
-  // Fallback para desenvolvimento quando o SMTP não está configurado:
-  // o código é exibido no console para permitir testar o fluxo localmente.
-  console.log(`\n[pendify-recuperacao] Código para ${email}: ${codigo} (válido até ${validade})\n`)
+  if (process.env.PENDIFY_DEV_RECOVERY === '1') {
+    console.log(`\n[pendify-recuperacao] Código para ${email}: ${codigo} (válido até ${validade})\n`)
+  } else {
+    console.error('[mailer] SMTP não configurado; código de recuperação não enviado')
+  }
 }

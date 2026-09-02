@@ -1,0 +1,8 @@
+node_modules
+out
+dist
+.pendify
+.pendify-test
+.pendify-web-test
+.git
+*.log

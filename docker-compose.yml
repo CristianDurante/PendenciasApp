@@ -1,0 +1,24 @@
+services:
+  pendify:
+    build: .
+    ports:
+      - "3939:3939"
+    environment:
+      PENDIFY_DB_PATH: /data/pendify.db
+      PENDIFY_SERVER_PORT: 3939
+      PENDIFY_DEV_RECOVERY: "0"
+      PENDIFY_ADMIN_EMAIL: ${PENDIFY_ADMIN_EMAIL:-admin@pendify.local}
+      PENDIFY_ADMIN_SENHA: ${PENDIFY_ADMIN_SENHA:-}
+      PENDIFY_CORS_ORIGIN: ${PENDIFY_CORS_ORIGIN:-}
+      PENDIFY_SMTP_HOST: ${PENDIFY_SMTP_HOST:-}
+      PENDIFY_SMTP_PORT: ${PENDIFY_SMTP_PORT:-587}
+      PENDIFY_SMTP_SECURE: ${PENDIFY_SMTP_SECURE:-0}
+      PENDIFY_SMTP_USER: ${PENDIFY_SMTP_USER:-}
+      PENDIFY_SMTP_PASS: ${PENDIFY_SMTP_PASS:-}
+      PENDIFY_SMTP_FROM: ${PENDIFY_SMTP_FROM:-}
+    volumes:
+      - pendify-data:/data
+    restart: unless-stopped
+
+volumes:
+  pendify-data:

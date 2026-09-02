@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { existsSync, mkdirSync } from 'node:fs'
 import type { ApiRequest } from '@shared/types'
 import { ensureDatabase } from '../src/main/db'
@@ -11,7 +11,7 @@ import { iniciarScheduler } from '../src/main/scheduler'
 async function main(): Promise<void> {
   const porta = Number(process.env.PENDIFY_SERVER_PORT || 3939)
   const dataDir = process.env.PENDIFY_DB_PATH
-    ? join(process.cwd(), '.pendify')
+    ? dirname(process.env.PENDIFY_DB_PATH)
     : join(process.cwd(), '.pendify')
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
   if (!process.env.PENDIFY_DB_PATH) {
@@ -22,7 +22,10 @@ async function main(): Promise<void> {
   await ensureBootstrap()
 
   const app = express()
-  app.use(cors())
+  app.disable('x-powered-by')
+  if (process.env.PENDIFY_CORS_ORIGIN) {
+    app.use(cors({ origin: process.env.PENDIFY_CORS_ORIGIN }))
+  }
   app.use(express.json({ limit: '25mb' }))
 
   app.get('/api/health', (_req, res) => {
@@ -43,6 +46,15 @@ async function main(): Promise<void> {
       res.status(400).json(resultado)
     }
   })
+
+  const rendererDir = join(process.cwd(), 'out', 'renderer')
+  if (existsSync(join(rendererDir, 'index.html'))) {
+    app.use(express.static(rendererDir))
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) return next()
+      res.sendFile(join(rendererDir, 'index.html'))
+    })
+  }
 
   const srv = app.listen(porta, () => {
     console.log(`[pendify-server] API REST ouvindo em http://localhost:${porta}`)

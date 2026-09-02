@@ -16,7 +16,7 @@ export function isElectron(): boolean {
 }
 
 function apiBase(): string {
-  return (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE || 'http://localhost:3939'
+  return (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE || ''
 }
 
 export class ApiError extends Error {

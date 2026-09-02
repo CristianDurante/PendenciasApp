@@ -7,12 +7,15 @@ export async function ensureBootstrap(): Promise<void> {
   const adminCount = await db.usuario.count({ where: { perfil: 'ADMIN' } })
   if (adminCount === 0) {
     const email = process.env.PENDIFY_ADMIN_EMAIL || 'admin@pendify.local'
-    const senha = process.env.PENDIFY_ADMIN_SENHA || 'admin'
+    const senha = process.env.PENDIFY_ADMIN_SENHA
+    if (!senha && process.env.NODE_ENV === 'production') {
+      throw new Error('PENDIFY_ADMIN_SENHA é obrigatória em produção')
+    }
     await db.usuario.create({
       data: {
         nome: 'Administrador',
         email,
-        senhaHash: hashPassword(senha),
+        senhaHash: hashPassword(senha || 'admin'),
         perfil: 'ADMIN',
         cargo: 'Administrador do sistema'
       }
@@ -21,7 +24,7 @@ export async function ensureBootstrap(): Promise<void> {
     if (!empresa) {
       await db.empresa.create({ data: { nome: 'Minha Empresa', ativo: true } })
     }
-    console.log('[bootstrap] Usuário administrador inicial criado (admin@pendify.local / admin)')
+    console.log(`[bootstrap] Usuário administrador inicial criado (${email})`)
   }
 
   const catCount = await db.categoria.count()
