@@ -309,7 +309,7 @@ function UsuariosSection(): ReactNode {
       pushToast('erro', 'Informe nome e e-mail.')
       return
     }
-    if (!editando && (!form.senha || form.senha.length < 6)) {
+    if (!editando && (!form.senha || form.senha.length < 8)) {
       pushToast('erro', 'Informe uma senha de acesso com no mínimo 6 caracteres.')
       return
     }
@@ -378,9 +378,9 @@ function UsuariosSection(): ReactNode {
   }
 
   function abrirEmailConvite(c: Convite): void {
-    const assunto = encodeURIComponent('Convite de acesso - Pendencias App')
+    const assunto = encodeURIComponent('Convite de acesso - Pendencias')
     const corpo = encodeURIComponent(
-      `Olá,\n\nVocê foi convidado(a) para usar o Pendencias App.\n\nPara criar seu acesso, abra o aplicativo, escolha "Tenho convite" e informe:\n\nE-mail: ${c.email}\nCódigo do convite: ${c.token}\n\nDepois é só criar a sua senha para começar a usar.`
+      `Olá,\n\nVocê foi convidado(a) para usar o Pendencias.\n\nPara criar seu acesso, abra o aplicativo, escolha "Tenho convite" e informe:\n\nE-mail: ${c.email}\nCódigo do convite: ${c.token}\n\nDepois é só criar a sua senha para começar a usar.`
     )
     window.location.href = `mailto:${c.email}?subject=${assunto}&body=${corpo}`
   }

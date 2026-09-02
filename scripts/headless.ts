@@ -1,10 +1,10 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-const dbDir = join(process.cwd(), '.pendify-test')
+const dbDir = join(process.cwd(), '.pendencias-test')
 rmSync(dbDir, { recursive: true, force: true })
-process.env.PENDIFY_DB_PATH = join(dbDir, 'pendify.db')
-process.env.PENDIFY_DEV_RECOVERY = '1'
+process.env.PENDENCIAS_DB_PATH = join(dbDir, 'pendencias.db')
+process.env.PENDENCIAS_DEV_RECOVERY = '1'
 
 async function run(): Promise<void> {
   const { ensureDatabase, getPrisma } = await import('../src/main/db')
@@ -20,7 +20,7 @@ async function run(): Promise<void> {
   }
 
   // Login
-  const loginRes = await dispatch({ resource: 'auth', action: 'login', args: { email: 'admin@pendify.local', senha: 'admin' } })
+  const loginRes = await dispatch({ resource: 'auth', action: 'login', args: { email: 'admin@pendencias.local', senha: 'admin' } })
   if (!loginRes.ok) throw new Error('login falhou: ' + loginRes.error)
   print('login', { ok: loginRes.ok })
   const token = (loginRes.data as { sessao: { token: string } }).sessao.token

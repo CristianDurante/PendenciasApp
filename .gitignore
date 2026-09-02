@@ -175,17 +175,17 @@
 *.lzma
 *.iso
 
-# Pendify
+# Pendencias
 node_modules
 out
 dist
 *.tsbuildinfo
-.pendify
+.pendencias
 prisma/*.db
 prisma/*.db-journal
 prisma/*.db-wal
 prisma/*.db-shm
 
-# Pendify test artifacts
-.pendify-test
-.pendify-test*
+# Pendencias test artifacts
+.pendencias-test
+.pendencias-test*

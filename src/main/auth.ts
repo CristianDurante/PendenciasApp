@@ -24,7 +24,7 @@ export function verifyPassword(senha: string, hash: string): boolean {
 
 export function validarRequisitosSenha(senha: string): string | null {
   if (!senha) return 'Informe uma nova senha'
-  if (senha.length < 6) return 'A senha deve ter no mínimo 6 caracteres'
+  if (senha.length < 8) return 'A senha deve ter no mínimo 8 caracteres'
   if (senha.length > 72) return 'A senha é muito longa (máximo 72 caracteres)'
   return null
 }
@@ -116,7 +116,7 @@ export async function aceitarConvite(
 ): Promise<LoginResult> {
   const db = getPrisma()
   const emailNorm = email.trim().toLowerCase()
-  if (senha.length < 6) throw new AppError('A senha deve ter no mínimo 6 caracteres')
+  if (senha.length < 8) throw new AppError('A senha deve ter no mínimo 8 caracteres')
   const convite = await db.convite.findFirst({
     where: { email: emailNorm, token: token.trim().toUpperCase() }
   })

@@ -83,9 +83,9 @@ export async function executarBackup(ctx: ApiContext | null, args: Record<string
   const destino = join(localBase, `backup-${timestamp}`)
   await mkdir(destino, { recursive: true })
 
-  await copyFile(dbPath, join(destino, 'pendify.db'))
-  if (existsSync(dbPath + '-wal')) await copyFile(dbPath + '-wal', join(destino, 'pendify.db-wal'))
-  if (existsSync(dbPath + '-shm')) await copyFile(dbPath + '-shm', join(destino, 'pendify.db-shm'))
+  await copyFile(dbPath, join(destino, 'pendencias.db'))
+  if (existsSync(dbPath + '-wal')) await copyFile(dbPath + '-wal', join(destino, 'pendencias.db-wal'))
+  if (existsSync(dbPath + '-shm')) await copyFile(dbPath + '-shm', join(destino, 'pendencias.db-shm'))
   if (existsSync(anexosDir)) {
     await cp(anexosDir, join(destino, 'anexos'), { recursive: true })
   }
@@ -105,11 +105,11 @@ export async function restaurarBackup(ctx: ApiContext, args: Record<string, unkn
   requireRoles(ctx, ['ADMIN'])
   const caminho = String(args.caminho || '')
   if (!caminho) throw new AppError('Caminho do backup é obrigatório')
-  const dbArquivo = join(caminho, 'pendify.db')
+  const dbArquivo = join(caminho, 'pendencias.db')
   try {
     await access(dbArquivo)
   } catch {
-    throw new AppError('Backup inválido: arquivo pendify.db não encontrado no caminho informado')
+    throw new AppError('Backup inválido: arquivo pendencias.db não encontrado no caminho informado')
   }
   const db = getPrisma()
   await checkpoint()

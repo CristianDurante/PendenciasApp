@@ -3,22 +3,22 @@ import type { ApiRequest, ApiResponse } from '@shared/types'
 
 const api = {
   invoke<T = unknown>(req: ApiRequest): Promise<ApiResponse<T>> {
-    return ipcRenderer.invoke('pendify:api', req)
+    return ipcRenderer.invoke('pendencias:api', req)
   },
   selecionarPasta(): Promise<string | null> {
-    return ipcRenderer.invoke('pendify:selecionarPasta')
+    return ipcRenderer.invoke('pendencias:selecionarPasta')
   },
   abrirExterno(url: string): Promise<unknown> {
-    return ipcRenderer.invoke('pendify:abrirExterno', url)
+    return ipcRenderer.invoke('pendencias:abrirExterno', url)
   },
   janela(acao: 'minimizar' | 'maximizar' | 'fechar'): Promise<unknown> {
-    return ipcRenderer.invoke('pendify:janela', acao)
+    return ipcRenderer.invoke('pendencias:janela', acao)
   },
   plataforma(): Promise<string> {
-    return ipcRenderer.invoke('pendify:plataforma')
+    return ipcRenderer.invoke('pendencias:plataforma')
   }
 }
 
-contextBridge.exposeInMainWorld('pendify', {
+contextBridge.exposeInMainWorld('pendencias', {
   api
 })

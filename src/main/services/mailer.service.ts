@@ -4,15 +4,15 @@ import type { Transporter } from 'nodemailer'
 let transporter: Transporter | null = null
 
 function obterTransporter(): Transporter | null {
-  const host = process.env.PENDIFY_SMTP_HOST
+  const host = process.env.PENDENCIAS_SMTP_HOST
   if (!host) return null
   if (!transporter) {
     transporter = nodemailer.createTransport({
       host,
-      port: Number(process.env.PENDIFY_SMTP_PORT || 587),
-      secure: process.env.PENDIFY_SMTP_SECURE === '1' || process.env.PENDIFY_SMTP_SECURE === 'true',
-      auth: process.env.PENDIFY_SMTP_USER
-        ? { user: process.env.PENDIFY_SMTP_USER, pass: process.env.PENDIFY_SMTP_PASS }
+      port: Number(process.env.PENDENCIAS_SMTP_PORT || 587),
+      secure: process.env.PENDENCIAS_SMTP_SECURE === '1' || process.env.PENDENCIAS_SMTP_SECURE === 'true',
+      auth: process.env.PENDENCIAS_SMTP_USER
+        ? { user: process.env.PENDENCIAS_SMTP_USER, pass: process.env.PENDENCIAS_SMTP_PASS }
         : undefined
     })
   }
@@ -25,7 +25,7 @@ export async function enviarEmailRecuperacao(
   codigo: string,
   expiraEm: Date
 ): Promise<void> {
-  const de = process.env.PENDIFY_SMTP_FROM || process.env.PENDIFY_SMTP_USER || 'no-reply@pendify.local'
+  const de = process.env.PENDENCIAS_SMTP_FROM || process.env.PENDENCIAS_SMTP_USER || 'no-reply@pendencias.local'
   const assunto = 'Pendencias App - Código de recuperação de senha'
   const validade = expiraEm.toLocaleString('pt-BR')
   const texto = [
@@ -49,8 +49,8 @@ export async function enviarEmailRecuperacao(
       console.error('[mailer] falha ao enviar e-mail:', e)
     }
   }
-  if (process.env.PENDIFY_DEV_RECOVERY === '1') {
-    console.log(`\n[pendify-recuperacao] Código para ${email}: ${codigo} (válido até ${validade})\n`)
+  if (process.env.PENDENCIAS_DEV_RECOVERY === '1') {
+    console.log(`\n[pendencias-recuperacao] Código para ${email}: ${codigo} (válido até ${validade})\n`)
   } else {
     console.error('[mailer] SMTP não configurado; código de recuperação não enviado')
   }

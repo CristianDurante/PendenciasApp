@@ -53,7 +53,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessao: null,
   carregandoSessao: true,
   toasts: [],
-  tema: (localStorage.getItem('pendify.tema') as Tema) || 'light',
+  tema: (localStorage.getItem('pendencias.tema') as Tema) || 'light',
   modalNovaPendencia: { aberto: false },
   pendenciaDestaque: null,
   painelBusca: false,
@@ -110,7 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   setTema: (tema) => {
-    localStorage.setItem('pendify.tema', tema)
+    localStorage.setItem('pendencias.tema', tema)
     aplicarTema(tema)
     set({ tema })
   },

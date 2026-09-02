@@ -11,7 +11,7 @@ import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 const UsuarioCreateSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório').max(120),
   email: z.string().email('E-mail inválido'),
-  senha: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
+  senha: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres'),
   perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).default('USUARIO'),
   cargo: z.string().max(80).optional().nullable(),
   telefone: z.string().max(30).optional().nullable(),
@@ -33,7 +33,7 @@ const UsuarioUpdateSchema = z.object({
   perfil: z.enum(PERFIS as [Perfil, ...Perfil[]]).optional(),
   cargo: z.string().max(80).optional().nullable(),
   telefone: z.string().max(30).optional().nullable(),
-  senha: z.string().min(6).optional(),
+  senha: z.string().min(8, 'A senha deve ter no mínimo 8 caracteres').optional(),
   ativo: z.boolean().optional(),
   equipeId: z.string().optional().nullable()
 })

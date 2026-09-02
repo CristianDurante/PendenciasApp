@@ -5,6 +5,7 @@ import type { LoginResult } from '@shared/types'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
 import { cn } from '../lib/format'
+import { BrandLogo } from '../components/layout/BrandLogo'
 
 type Modo = 'entrar' | 'convite' | 'recuperar'
 type PassoRecuperacao = 'email' | 'codigo' | 'senha' | 'feito'
@@ -61,8 +62,8 @@ export function LoginPage(): ReactNode {
       setErro('Preencha e-mail, código do convite, nome e senha.')
       return
     }
-    if (novaSenha.length < 6) {
-      setErro('A senha deve ter no mínimo 6 caracteres.')
+    if (novaSenha.length < 8) {
+      setErro('A senha deve ter no mínimo 8 caracteres.')
       return
     }
     if (novaSenha !== confirmarSenha) {
@@ -177,10 +178,10 @@ export function LoginPage(): ReactNode {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-black text-white shadow-lg shadow-brand-600/30">
-            P
+          <div className="mb-3 rounded-[18px] shadow-lg shadow-brand-600/30">
+            <BrandLogo tamanho="lg" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Pendencias App</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Pendencias</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Controle profissional de pendências, compromissos e retornos.
           </p>

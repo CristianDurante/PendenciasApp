@@ -176,7 +176,7 @@ export const registry: Record<string, Record<string, Handler>> = {
     alterarSenha: async (ctx, a) => {
       const atual = String(a.senhaAtual || '')
       const nova = String(a.senhaNova || '')
-      if (nova.length < 6) throw new AppError('A nova senha deve ter no mínimo 6 caracteres')
+      if (nova.length < 8) throw new AppError('A nova senha deve ter no mínimo 8 caracteres')
       const db = getPrisma()
       const u = await db.usuario.findUnique({ where: { id: ctx.usuarioId } })
       if (!u || !verifyPassword(atual, u.senhaHash)) throw new AppError('Senha atual incorreta')
@@ -252,6 +252,6 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
       return { ok: false, error: msg || 'Dados inválidos' }
     }
     console.error('[dispatch]', req?.resource, req?.action, err)
-    return { ok: false, error: 'Erro interno: ' + (err instanceof Error ? err.message : String(err)) }
+    return { ok: false, error: 'Erro interno. Tente novamente.' }
   }
 }

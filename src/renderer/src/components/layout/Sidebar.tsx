@@ -19,6 +19,7 @@ import {
 import { cn } from '../../lib/format'
 import { useAppStore } from '../../store/appStore'
 import { Avatar } from '../ui'
+import { BrandLogo } from './BrandLogo'
 
 const itens = [
   { to: '/', label: 'Dashboard', icone: <LayoutDashboard className="h-4.5 w-4.5 h-[18px] w-[18px]" /> },
@@ -42,9 +43,9 @@ export function Sidebar(): ReactNode {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-2 px-4 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-lg font-black text-white">P</div>
+        <BrandLogo tamanho="sm" />
         <div>
-          <p className="text-base font-bold leading-tight text-slate-900 dark:text-white">Pendencias App</p>
+          <p className="text-base font-bold leading-tight text-slate-900 dark:text-white">Pendencias</p>
           <p className="text-[11px] text-slate-400">Controle de pendências</p>
         </div>
       </div>

@@ -6,10 +6,10 @@ export async function ensureBootstrap(): Promise<void> {
   const db = getPrisma()
   const adminCount = await db.usuario.count({ where: { perfil: 'ADMIN' } })
   if (adminCount === 0) {
-    const email = process.env.PENDIFY_ADMIN_EMAIL || 'admin@pendify.local'
-    const senha = process.env.PENDIFY_ADMIN_SENHA
+    const email = process.env.PENDENCIAS_ADMIN_EMAIL || 'admin@pendencias.local'
+    const senha = process.env.PENDENCIAS_ADMIN_SENHA
     if (!senha && process.env.NODE_ENV === 'production') {
-      throw new Error('PENDIFY_ADMIN_SENHA é obrigatória em produção')
+      throw new Error('PENDENCIAS_ADMIN_SENHA é obrigatória em produção')
     }
     await db.usuario.create({
       data: {

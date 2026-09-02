@@ -5,11 +5,11 @@ import { randomInt } from 'node:crypto'
 import { enviarEmailRecuperacao } from './mailer.service'
 import { registrarHistorico } from './historico.service'
 
-const VALIDADE_MIN = Math.max(5, Number(process.env.PENDIFY_RECOVERY_VALIDADE_MIN || 15))
-const MAX_TENTATIVAS = Math.max(1, Number(process.env.PENDIFY_RECOVERY_MAX_TENTATIVAS || 5))
-const MAX_SOLICITACOES_HORA = Math.max(1, Number(process.env.PENDIFY_RECOVERY_MAX_SOLICITACOES_HORA || 3))
+const VALIDADE_MIN = Math.max(5, Number(process.env.PENDENCIAS_RECOVERY_VALIDADE_MIN || 15))
+const MAX_TENTATIVAS = Math.max(1, Number(process.env.PENDENCIAS_RECOVERY_MAX_TENTATIVAS || 5))
+const MAX_SOLICITACOES_HORA = Math.max(1, Number(process.env.PENDENCIAS_RECOVERY_MAX_SOLICITACOES_HORA || 3))
 // Somente para desenvolvimento/testes: retorna o código na resposta da API.
-const DEV_RETORNAR_CODIGO = process.env.PENDIFY_DEV_RECOVERY === '1'
+const DEV_RETORNAR_CODIGO = process.env.PENDENCIAS_DEV_RECOVERY === '1'
 
 const MENSAGEM_GENERICA = 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.'
 const MENSAGEM_CODIGO_INVALIDO = 'Código inválido ou expirado.'

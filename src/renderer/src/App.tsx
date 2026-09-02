@@ -96,7 +96,7 @@ function Shell(): ReactNode {
   if (carregandoSessao) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <p className="text-sm text-slate-400">Carregando Pendencias App…</p>
+        <p className="text-sm text-slate-400">Carregando Pendencias…</p>
       </div>
     )
   }

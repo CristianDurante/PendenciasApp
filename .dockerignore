@@ -1,8 +1,7 @@
 node_modules
 out
 dist
-.pendify
-.pendify-test
-.pendify-web-test
+.pendencias
+.pendencias-test
 .git
 *.log

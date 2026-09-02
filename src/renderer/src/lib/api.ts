@@ -1,18 +1,19 @@
 import type { ApiResponse } from '@shared/types'
 
-const TOKEN_KEY = 'pendify.token'
+const TOKEN_KEY = 'pendencias.token'
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return isElectron() ? localStorage.getItem(TOKEN_KEY) : null
 }
 
 export function setToken(token: string | null): void {
+  if (!isElectron()) return
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
 }
 
 export function isElectron(): boolean {
-  return typeof window !== 'undefined' && !!window.pendify
+  return typeof window !== 'undefined' && !!window.pendencias
 }
 
 function apiBase(): string {
@@ -39,11 +40,12 @@ export async function call<T = unknown>(
 
   let resposta: ApiResponse<T>
   if (isElectron()) {
-    resposta = await window.pendify!.api.invoke<T>(req)
+    resposta = await window.pendencias!.api.invoke<T>(req)
   } else {
     const base = apiBase()
     const r = await fetch(`${base}/api/${resource}/${action}`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {})

@@ -1,25 +1,35 @@
 import { PrismaClient } from '@prisma/client'
 import { app } from 'electron'
-import { existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 let prisma: PrismaClient | null = null
 
 export function resolveDbPath(): string {
-  if (process.env.PENDIFY_DB_PATH) return process.env.PENDIFY_DB_PATH
+  if (process.env.PENDENCIAS_DB_PATH) return process.env.PENDENCIAS_DB_PATH
   try {
     if (app && typeof app.getPath === 'function') {
-      return join(app.getPath('userData'), 'pendify.db')
+      return join(app.getPath('userData'), 'pendencias.db')
     }
   } catch {
     // fallthrough
   }
-  return join(process.cwd(), '.pendify', 'pendify.db')
+  return join(process.cwd(), '.pendencias', 'pendencias.db')
 }
 
 export function resolveDataDir(): string {
   return dirname(resolveDbPath())
+}
+
+function migrarBancoLegado(dbPath: string): void {
+  const bancoLegado = join(process.cwd(), '.pendify', 'pendify.db')
+  if (existsSync(dbPath) || !existsSync(bancoLegado)) return
+  mkdirSync(dirname(dbPath), { recursive: true })
+  copyFileSync(bancoLegado, dbPath)
+  for (const sufixo of ['-wal', '-shm']) {
+    if (existsSync(bancoLegado + sufixo)) copyFileSync(bancoLegado + sufixo, dbPath + sufixo)
+  }
 }
 
 export function getPrisma(): PrismaClient {
@@ -115,6 +125,7 @@ function clientTemModelosNecessarios(): boolean {
 
 export async function ensureDatabase(): Promise<void> {
   const dbPath = resolveDbPath()
+  migrarBancoLegado(dbPath)
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true })
   if (!existsSync(dbPath)) {
     await runMigration()

@@ -41,11 +41,11 @@ function criarJanela(): void {
 }
 
 function registrarIpc(): void {
-  ipcMain.handle('pendify:api', async (_evento, req: ApiRequest) => {
+  ipcMain.handle('pendencias:api', async (_evento, req: ApiRequest) => {
     return dispatch(req)
   })
 
-  ipcMain.handle('pendify:selecionarPasta', async () => {
+  ipcMain.handle('pendencias:selecionarPasta', async () => {
     const options: Electron.OpenDialogOptions = { properties: ['openDirectory', 'createDirectory'] }
     const resultado = janelaPrincipal
       ? await dialog.showOpenDialog(janelaPrincipal, options)
@@ -54,14 +54,14 @@ function registrarIpc(): void {
     return resultado.filePaths[0]
   })
 
-  ipcMain.handle('pendify:abrirExterno', async (_e, url: string) => {
+  ipcMain.handle('pendencias:abrirExterno', async (_e, url: string) => {
     if (typeof url === 'string' && /^https?:\/\//.test(url)) {
       await shell.openExternal(url)
     }
     return { ok: true }
   })
 
-  ipcMain.handle('pendify:janela', (_e, acao: string) => {
+  ipcMain.handle('pendencias:janela', (_e, acao: string) => {
     const win = BrowserWindow.getFocusedWindow() || janelaPrincipal
     if (!win) return { ok: false }
     if (acao === 'minimizar') win.minimize()
@@ -72,14 +72,14 @@ function registrarIpc(): void {
     return { ok: true }
   })
 
-  ipcMain.handle('pendify:plataforma', () => process.platform)
+  ipcMain.handle('pendencias:plataforma', () => process.platform)
 }
 
 app.whenReady().then(async () => {
   try {
     await inicializarAplicacao()
   } catch (err) {
-    console.error('[pendify] erro ao inicializar banco', err)
+    console.error('[pendencias] erro ao inicializar banco', err)
   }
   registrarIpc()
   criarJanela()
