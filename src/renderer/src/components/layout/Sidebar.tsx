@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -21,6 +21,8 @@ import { useAppStore } from '../../store/appStore'
 import { Avatar } from '../ui'
 import { BrandLogo } from './BrandLogo'
 import { PERFIL_LABEL } from '@shared/constants'
+import type { ConfigApp } from '@shared/types'
+import { call } from '../../lib/api'
 
 const itens = [
   { to: '/', label: 'Dashboard', icone: <LayoutDashboard className="h-4.5 w-4.5 h-[18px] w-[18px]" /> },
@@ -37,9 +39,29 @@ const itens = [
   { to: '/historico', label: 'Histórico', icone: <History className="h-[18px] w-[18px]" /> }
 ]
 
+const moduloPorRota: Record<string, keyof NonNullable<ConfigApp['modulosSidebar']>> = {
+  '/minhas-atividades': 'minhasAtividades',
+  '/pendencias': 'pendencias',
+  '/kanban': 'kanban',
+  '/calendario': 'calendario',
+  '/compromissos': 'compromissos',
+  '/retornos': 'retornos',
+  '/anotacoes': 'anotacoes',
+  '/clientes': 'clientes',
+  '/projetos': 'projetos',
+  '/relatorios': 'relatorios',
+  '/historico': 'historico'
+}
+
 export function Sidebar(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
+  const modulos = useAppStore((s) => s.modulosSidebar)
+  const definirModulosSidebar = useAppStore((s) => s.definirModulosSidebar)
+
+  useEffect(() => {
+    void call<ConfigApp>('empresa', 'config').then((config) => definirModulosSidebar(config.modulosSidebar)).catch(() => undefined)
+  }, [definirModulosSidebar])
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -61,7 +83,7 @@ export function Sidebar(): ReactNode {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-        {itens.map((item) => (
+        {itens.filter((item) => item.to === '/' || modulos?.[moduloPorRota[item.to]] !== false).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

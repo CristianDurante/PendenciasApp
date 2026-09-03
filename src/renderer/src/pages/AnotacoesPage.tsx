@@ -1,204 +1,121 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, StickyNote, Pencil, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Bold, Check, FileText, Italic, List, ListOrdered, Loader2, Underline } from 'lucide-react'
 import type { Nota } from '@shared/types'
 import { useAppStore } from '../store/appStore'
-import { useCatalogoStore } from '../store/catalogoStore'
 import { call } from '../lib/api'
-import { formatarDataHora, relativo } from '../lib/format'
-import { Button, Input, Textarea, Select, Modal, ConfirmDialog, EmptyState, Loading } from '../components/ui'
-
-interface FormNota {
-  titulo: string
-  conteudo: string
-  clienteId: string
-}
 
 export function AnotacoesPage(): ReactNode {
-  const [params] = useSearchParams()
   const pushToast = useAppStore((s) => s.pushToast)
-  const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
-  const clientes = useCatalogoStore((s) => s.clientes)
-
-  const [itens, setItens] = useState<Nota[]>([])
-  const [busca, setBusca] = useState('')
+  const [nota, setNota] = useState<Nota | null>(null)
   const [carregando, setCarregando] = useState(true)
-  const [modalAberto, setModalAberto] = useState(false)
-  const [editando, setEditando] = useState<Nota | null>(null)
-  const [excluindo, setExcluindo] = useState<Nota | null>(null)
-  const [removendo, setRemovendo] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [salvo, setSalvo] = useState(false)
+  const editorRef = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const carregar = useCallback(async (): Promise<void> => {
     setCarregando(true)
-    const lista = await call<Nota[]>('nota', 'listar', { busca }).catch(() => [])
-    setItens(lista)
-    setCarregando(false)
-  }, [busca])
+    try {
+      const notas = await call<Nota[]>('nota', 'listar')
+      const existente = notas.find((item) => item.titulo === 'Meu bloco de notas')
+      if (existente) {
+        setNota(existente)
+      } else {
+        const criada = await call<Nota>('nota', 'criar', { titulo: 'Meu bloco de notas', conteudo: '' })
+        setNota(criada)
+      }
+    } catch (e) {
+      pushToast('erro', 'Não foi possível abrir suas anotações', e instanceof Error ? e.message : undefined)
+    } finally {
+      setCarregando(false)
+    }
+  }, [pushToast])
 
   useEffect(() => {
-    void carregarCatalogo()
-  }, [carregarCatalogo])
+    if (!carregando && editorRef.current && nota) editorRef.current.innerHTML = nota.conteudo || ''
+  }, [carregando, nota?.id])
 
   useEffect(() => {
     void carregar()
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+    }
   }, [carregar])
 
-  const notaFoco = params.get('nota')
-
-  useEffect(() => {
-    if (notaFoco && itens.length > 0 && !modalAberto) {
-      const n = itens.find((x) => x.id === notaFoco)
-      if (n) {
-        setEditando(n)
-        setModalAberto(true)
-      }
-    }
-  }, [notaFoco, itens, modalAberto])
-
-  async function salvar(dados: FormNota): Promise<void> {
-    if (editando) {
-      await call('nota', 'atualizar', { id: editando.id, ...dados })
-      pushToast('sucesso', 'Anotação atualizada')
-    } else {
-      await call('nota', 'criar', dados)
-      pushToast('sucesso', 'Anotação criada')
-    }
-    setModalAberto(false)
-    setEditando(null)
-    await carregar()
+  function alterarTexto(valor: string): void {
+    setSalvo(false)
+    if (!nota) return
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      void salvar(valor)
+    }, 700)
   }
 
-  async function excluir(): Promise<void> {
-    if (!excluindo) return
-    setRemovendo(true)
-    try {
-      await call('nota', 'excluir', { id: excluindo.id })
-      pushToast('sucesso', 'Anotação excluída')
-      setExcluindo(null)
-      await carregar()
-    } catch (e) {
-      pushToast('erro', 'Falha ao excluir', e instanceof Error ? e.message : undefined)
-    } finally {
-      setRemovendo(false)
-    }
+  function executar(comando: string, valor?: string): void {
+    editorRef.current?.focus()
+    document.execCommand(comando, false, valor)
+    alterarTexto(editorRef.current?.innerHTML || '')
   }
 
-  return (
-    <div className="flex h-full flex-col p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar anotações…" className="input !pl-9" />
-        </div>
-        <Button onClick={() => { setEditando(null); setModalAberto(true) }}>
-          <Plus className="h-4 w-4" /> Nova Anotação
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {carregando ? (
-          <div className="flex h-full items-center justify-center"><Loading /></div>
-        ) : itens.length === 0 ? (
-          <EmptyState titulo="Nenhuma anotação" descricao="Registre insights, reuniões e decisões." />
-        ) : (
-          <div className="columns-1 gap-3 md:columns-2 xl:columns-3">
-            {itens.map((n) => (
-              <div key={n.id} className="card mb-3 break-inside-avoid">
-                <div className="flex items-start gap-2">
-                  <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-800 dark:text-white">{n.titulo}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-500 dark:text-slate-400 line-clamp-5">{n.conteudo || ''}</p>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>
-                        {n.cliente?.nome ? `${n.cliente.nome} · ` : ''}
-                        {n.usuario?.nome || ''}
-                      </span>
-                      <span>{relativo(formatarDataHora(n.atualizadoEm))}</span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => { setEditando(n); setModalAberto(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => setExcluindo(n)}><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <NotaModal aberto={modalAberto} aoFechar={() => { setModalAberto(false); setEditando(null) }} editando={editando} aoSalvar={salvar} />
-
-      <ConfirmDialog
-        aberto={!!excluindo}
-        aoFechar={() => setExcluindo(null)}
-        aoConfirmar={() => void excluir()}
-        titulo="Excluir anotação"
-        mensagem={`Excluir "${excluindo?.titulo || ''}"?`}
-        confirmarTexto={removendo ? 'Excluindo…' : 'Excluir'}
-        perigo
-      />
-    </div>
-  )
-}
-
-function NotaModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolean; aoFechar: () => void; editando: Nota | null; aoSalvar: (d: FormNota) => Promise<void> }): ReactNode {
-  const clientes = useCatalogoStore((s) => s.clientes)
-  const [form, setForm] = useState<FormNota>({ titulo: '', conteudo: '', clienteId: '' })
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
-
-  useEffect(() => {
-    if (aberto) {
-      setForm(editando ? {
-        titulo: editando.titulo,
-        conteudo: editando.conteudo || '',
-        clienteId: editando.clienteId || ''
-      } : { titulo: '', conteudo: '', clienteId: '' })
-      setErro('')
-    }
-  }, [aberto, editando])
-
-  async function salvar(): Promise<void> {
-    if (!form.titulo.trim()) {
-      setErro('Informe o título.')
-      return
-    }
+  async function salvar(valor: string): Promise<void> {
+    if (!nota) return
     setSalvando(true)
     try {
-      await aoSalvar({ ...form, clienteId: form.clienteId || '' })
+      const atualizada = await call<Nota>('nota', 'atualizar', { id: nota.id, conteudo: valor })
+      setNota(atualizada)
+      setSalvo(true)
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
+      pushToast('erro', 'Falha ao salvar anotação', e instanceof Error ? e.message : undefined)
     } finally {
       setSalvando(false)
     }
   }
 
   return (
-    <Modal aberto={aberto} aoFechar={aoFechar} titulo={editando ? 'Editar anotação' : 'Nova anotação'} largura="max-w-2xl">
-      <div className="space-y-3">
-        <div>
-          <label className="label">Título *</label>
-          <Input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Ex.: Decisões da reunião de hoje" />
+    <div className="flex h-full flex-col p-4 md:p-6">
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-100 p-2 text-amber-600 dark:bg-amber-950 dark:text-amber-300"><FileText className="h-5 w-5" /></div>
+            <div>
+              <h1 className="font-semibold text-slate-900 dark:text-white">Meu bloco de notas</h1>
+              <p className="text-xs text-slate-400">Suas anotações pessoais</p>
+            </div>
+          </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400" aria-live="polite">
+            {carregando || salvando ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando...</> : salvo ? <><Check className="h-3.5 w-3.5 text-emerald-500" /> Salvo</> : null}
+          </div>
+        </header>
+        <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 px-5 py-2 dark:border-slate-700">
+          <button type="button" title="Negrito" aria-label="Negrito" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('bold')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Bold className="h-4 w-4" /></button>
+          <button type="button" title="Itálico" aria-label="Itálico" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('italic')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Italic className="h-4 w-4" /></button>
+          <button type="button" title="Sublinhado" aria-label="Sublinhado" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('underline')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Underline className="h-4 w-4" /></button>
+          <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+          <button type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('insertUnorderedList')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><List className="h-4 w-4" /></button>
+          <button type="button" title="Lista numerada" aria-label="Lista numerada" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('insertOrderedList')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><ListOrdered className="h-4 w-4" /></button>
+          <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+          <span className="text-xs text-slate-400">Cor</span>
+          {['#334155', '#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea'].map((cor) => (
+            <button key={cor} type="button" title={`Cor ${cor}`} aria-label={`Aplicar cor ${cor}`} onMouseDown={(e) => e.preventDefault()} onClick={() => executar('foreColor', cor)} className="h-5 w-5 rounded-full border border-white shadow-sm ring-1 ring-slate-200 dark:border-slate-900 dark:ring-slate-700" style={{ backgroundColor: cor }} />
+          ))}
         </div>
-        <div>
-          <label className="label">Conteúdo</label>
-          <Textarea value={form.conteudo} onChange={(e) => setForm((f) => ({ ...f, conteudo: e.target.value }))} rows={8} />
-        </div>
-        <div>
-          <label className="label">Cliente</label>
-          <Select value={form.clienteId} onChange={(e) => setForm((f) => ({ ...f, clienteId: e.target.value }))}>
-            <option value="">Sem cliente</option>
-            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </Select>
+        <div className="flex-1 p-5 md:p-8">
+          {carregando ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Abrindo suas anotações...</div>
+          ) : (
+            <div
+              autoFocus
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={(e) => alterarTexto(e.currentTarget.innerHTML)}
+              data-placeholder="Comece a escrever..."
+              className="h-full min-h-[420px] w-full overflow-y-auto border-0 bg-transparent text-base leading-7 text-slate-700 outline-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] dark:text-slate-200 dark:empty:before:text-slate-600"
+              aria-label="Texto das minhas anotações"
+            />
+          )}
         </div>
       </div>
-      {erro && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">{erro}</div>}
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" onClick={aoFechar}>Cancelar</Button>
-        <Button onClick={() => void salvar()} carregando={salvando}>Salvar</Button>
-      </div>
-    </Modal>
+    </div>
   )
 }

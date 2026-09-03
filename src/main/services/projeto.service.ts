@@ -12,7 +12,7 @@ const ProjetoSchema = z.object({
   descricao: z.string().max(2000).optional().nullable(),
   status: z.enum(PROJETO_STATUS as [string, ...string[]]).optional(),
   responsavelId: z.string().optional().nullable(),
-  clienteId: z.string().optional().nullable(),
+  clienteId: z.string().min(1, 'Cliente é obrigatório'),
   dataInicio: z.string().optional().nullable(),
   dataFim: z.string().optional().nullable()
 })

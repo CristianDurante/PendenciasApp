@@ -68,8 +68,8 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => tagService.excluirTag(ctx, a)
   },
   cliente: {
-    listar: (ctx, a) => clienteService.listarClientes(a),
-    obter: (ctx, a) => clienteService.obterCliente(a),
+    listar: (ctx, a) => clienteService.listarClientes(ctx, a),
+    obter: (ctx, a) => clienteService.obterCliente(ctx, a),
     detalhe: (ctx, a) => clienteService.detalheCliente(ctx, a),
     criar: (ctx, a) => clienteService.criarCliente(ctx, a),
     atualizar: (ctx, a) => clienteService.atualizarCliente(ctx, a),
@@ -110,8 +110,8 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => anexoService.excluirAnexo(ctx, a)
   },
   nota: {
-    listar: (ctx, a) => notaService.listarNotas(a),
-    obter: (ctx, a) => notaService.obterNota(a),
+    listar: (ctx, a) => notaService.listarNotas(ctx, a),
+    obter: (ctx, a) => notaService.obterNota(ctx, a),
     criar: (ctx, a) => notaService.criarNota(ctx, a),
     atualizar: (ctx, a) => notaService.atualizarNota(ctx, a),
     excluir: (ctx, a) => notaService.excluirNota(ctx, a)

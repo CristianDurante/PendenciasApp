@@ -70,6 +70,14 @@ export function PendenciaModal(): ReactNode {
       pushToast('erro', 'Título obrigatório', 'Informe um título para a pendência.')
       return
     }
+    if (!editandoId && (!dados.clienteId || !dados.projetoId || !dados.responsavelId || !dados.prazo)) {
+      pushToast('erro', 'Campos obrigatórios', 'Informe cliente, projeto, responsável e prazo.')
+      return
+    }
+    if (!editandoId && dados.prazo < new Date().toISOString().slice(0, 10)) {
+      pushToast('erro', 'Prazo inválido', 'O prazo deve ser hoje ou uma data futura.')
+      return
+    }
     setSalvando(true)
     try {
       const args: Record<string, unknown> = {

@@ -179,6 +179,11 @@ export function requireAdminOrGestor(ctx: ApiContext): void {
   requireRoles(ctx, ['ADMIN', 'GESTOR'])
 }
 
+export function requireEmpresa(ctx: ApiContext): string {
+  if (!ctx.empresaId) throw new AppError('Configure a empresa antes de criar ou consultar registros.')
+  return ctx.empresaId
+}
+
 // Perfis com visão global (todas as equipes/pendências): ADMIN e GESTOR.
 export function temAcessoGlobal(ctx: ApiContext): boolean {
   return ctx.isAdmin || ctx.perfil === 'GESTOR'

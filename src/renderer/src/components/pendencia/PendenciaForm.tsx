@@ -111,9 +111,9 @@ export function PendenciaForm({
         />
       </Field>
 
-      <Field label="Cliente">
+      <Field label="Cliente" obrigatorio={!edicao}>
         <Select value={dados.clienteId} onChange={(e) => set('clienteId', e.target.value)}>
-          <option value="">Sem cliente</option>
+          <option value="">Selecione um cliente</option>
           {clientes.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nome}
@@ -122,9 +122,9 @@ export function PendenciaForm({
         </Select>
       </Field>
 
-      <Field label="Projeto">
+      <Field label="Projeto" obrigatorio={!edicao}>
         <Select value={dados.projetoId} onChange={(e) => set('projetoId', e.target.value)}>
-          <option value="">Sem projeto</option>
+          <option value="">Selecione um projeto</option>
           {projetos.map((p) => (
             <option key={p.id} value={p.id}>
               {p.nome}
@@ -133,9 +133,9 @@ export function PendenciaForm({
         </Select>
       </Field>
 
-      <Field label="Responsável">
+      <Field label="Responsável" obrigatorio={!edicao}>
         <Select value={dados.responsavelId} onChange={(e) => aoSelecionarResponsavel(e.target.value)}>
-          <option value="">Sem responsável</option>
+          <option value="">Selecione um responsável</option>
           {usuarios.map((u) => (
             <option key={u.id} value={u.id}>
               {u.nome}{u.equipe?.nome ? ` - ${u.equipe.nome}` : ''}
@@ -152,8 +152,8 @@ export function PendenciaForm({
         <Input value={dados.sistema} onChange={(e) => set('sistema', e.target.value)} placeholder="Ex.: ERP, CRM..." />
       </Field>
 
-      <Field label="Prazo">
-        <Input type="date" value={dados.prazo} onChange={(e) => set('prazo', e.target.value)} />
+      <Field label="Prazo" obrigatorio={!edicao}>
+        <Input type="date" min={new Date().toISOString().slice(0, 10)} value={dados.prazo} onChange={(e) => set('prazo', e.target.value)} />
       </Field>
 
       <Field label="Horário">

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
-import { AppError, requireRoles } from '../auth'
+import { AppError, requireEmpresa, requireRoles } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
@@ -36,8 +36,10 @@ const select = {
 
 export async function listarEquipes(ctx: ApiContext): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const itens = await db.equipe.findMany({
+    where: { empresaId },
     select,
     orderBy: { nome: 'asc' }
   })
@@ -52,10 +54,11 @@ export async function listarEquipes(ctx: ApiContext): Promise<unknown> {
 
 export async function obterEquipe(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
-  const equipe = await db.equipe.findUnique({
-    where: { id },
+  const equipe = await db.equipe.findFirst({
+    where: { id, empresaId },
     include: {
       lider: { select: { id: true, nome: true, avatar: true, email: true, perfil: true } },
       usuarios: {
@@ -106,14 +109,15 @@ async function validarLiderNaEquipe(db: ReturnType<typeof getPrisma>, equipeId: 
 
 export async function criarEquipe(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const parsed = EquipeCreateSchema.parse(args)
   const db = getPrisma()
   const nome = parsed.nome.trim()
-  const duplicado = await db.equipe.findFirst({ where: { nome } })
+  const duplicado = await db.equipe.findFirst({ where: { nome, empresaId } })
   if (duplicado) throw new AppError('Já existe uma equipe com este nome')
 
   const equipe = await db.equipe.create({
-    data: { nome, descricao: parsed.descricao || null, ativo: parsed.ativo }
+    data: { nome, descricao: parsed.descricao || null, ativo: parsed.ativo, empresaId }
   })
 
   const ids = Array.from(new Set(parsed.usuarioIds || []))
@@ -142,10 +146,11 @@ export async function criarEquipe(ctx: ApiContext, args: Record<string, unknown>
 
 export async function atualizarEquipe(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const parsed = EquipeUpdateSchema.parse(args)
   const db = getPrisma()
   const id = String(args.id || '')
-  const equipe = await db.equipe.findUnique({ where: { id } })
+  const equipe = await db.equipe.findFirst({ where: { id, empresaId } })
   if (!equipe) throw new AppError('Equipe não encontrada', 404)
 
   if (parsed.nome !== undefined) {
@@ -190,11 +195,14 @@ export async function atualizarEquipe(ctx: ApiContext, args: Record<string, unkn
 
 export async function gerenciarMembros(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
-  const equipe = await db.equipe.findUnique({ where: { id } })
+  const equipe = await db.equipe.findFirst({ where: { id, empresaId } })
   if (!equipe) throw new AppError('Equipe não encontrada', 404)
   const usuarioIds = Array.from(new Set((args.usuarioIds as string[] | undefined) || []))
+  const usuariosEmpresa = await db.usuario.findMany({ where: { id: { in: usuarioIds }, empresaId }, select: { id: true } })
+  if (usuariosEmpresa.length !== usuarioIds.length) throw new AppError('Todos os membros devem pertencer à empresa atual')
 
   const atuais = await db.usuario.findMany({ where: { equipeId: id }, select: { id: true } })
   const idsAtuais = new Set(atuais.map((u) => u.id))
@@ -227,10 +235,11 @@ export async function gerenciarMembros(ctx: ApiContext, args: Record<string, unk
 
 export async function excluirEquipe(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireRoles(ctx, ['ADMIN'])
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
-  const equipe = await db.equipe.findUnique({
-    where: { id },
+  const equipe = await db.equipe.findFirst({
+    where: { id, empresaId },
     include: { _count: { select: { pendencias: true, usuarios: true } } }
   })
   if (!equipe) throw new AppError('Equipe não encontrada', 404)

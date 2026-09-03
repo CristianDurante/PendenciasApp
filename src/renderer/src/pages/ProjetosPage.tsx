@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, FolderKanban, Pencil, Eye, CheckCircle2, TriangleAlert } from 'lucide-react'
+import { Plus, Search, FolderKanban, Pencil, Eye, Trash2, CheckCircle2, TriangleAlert } from 'lucide-react'
 import type { Projeto } from '@shared/types'
 import { PROJETO_STATUS, PROJETO_STATUS_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
 import { useCatalogoStore } from '../store/catalogoStore'
 import { call } from '../lib/api'
 import { cn } from '../lib/format'
-import { Button, Input, Textarea, Select, Modal, ProjetoStatusBadge, ProgressBar, EmptyState, Loading, Avatar } from '../components/ui'
+import { Button, Input, Textarea, Select, Modal, ConfirmDialog, ProjetoStatusBadge, ProgressBar, EmptyState, Loading, Avatar } from '../components/ui'
 
 export interface ProjetoComDados extends Projeto {
   progresso?: number
@@ -42,6 +42,8 @@ export function ProjetosPage(): ReactNode {
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<ProjetoComDados | null>(null)
+  const [excluindo, setExcluindo] = useState<ProjetoComDados | null>(null)
+  const [removendo, setRemovendo] = useState(false)
 
   useEffect(() => {
     void carregarCatalogo()
@@ -64,6 +66,22 @@ export function ProjetosPage(): ReactNode {
     const lista = await call<ProjetoComDados[]>('projeto', 'listar', { busca })
     setItens(lista)
     await recarregar()
+  }
+
+  async function excluir(): Promise<void> {
+    if (!excluindo) return
+    setRemovendo(true)
+    try {
+      await call('projeto', 'excluir', { id: excluindo.id })
+      pushToast('sucesso', 'Projeto excluído')
+      setExcluindo(null)
+      setItens(await call<ProjetoComDados[]>('projeto', 'listar', { busca }))
+      await recarregar()
+    } catch (e) {
+      pushToast('erro', 'Falha ao excluir projeto', e instanceof Error ? e.message : undefined)
+    } finally {
+      setRemovendo(false)
+    }
   }
 
   return (
@@ -117,6 +135,7 @@ export function ProjetosPage(): ReactNode {
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" onClick={() => navigate(`/projetos/${p.id}`)}><Eye className="h-3.5 w-3.5" /> Ver</Button>
                     <Button variant="ghost" size="sm" onClick={() => { setEditando(p); setModalAberto(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => setExcluindo(p)} title="Excluir projeto"><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
                   </div>
                 </div>
               </div>
@@ -126,6 +145,16 @@ export function ProjetosPage(): ReactNode {
       </div>
 
       <ProjetoModal aberto={modalAberto} aoFechar={() => { setModalAberto(false); setEditando(null) }} editando={editando} aoSalvar={salvar} />
+
+      <ConfirmDialog
+        aberto={!!excluindo}
+        aoFechar={() => setExcluindo(null)}
+        aoConfirmar={() => void excluir()}
+        titulo="Excluir projeto"
+        mensagem={`Excluir o projeto "${excluindo?.nome || ''}"? As pendências vinculadas ficarão sem projeto.`}
+        confirmarTexto={removendo ? 'Excluindo…' : 'Excluir'}
+        perigo
+      />
     </div>
   )
 }
@@ -157,6 +186,10 @@ function ProjetoModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
       setErro('Informe o nome do projeto.')
       return
     }
+    if (!editando && !form.clienteId) {
+      setErro('Selecione o cliente do projeto.')
+      return
+    }
     setSalvando(true)
     try {
       await aoSalvar({ ...form, status: form.status || 'ATIVO' })
@@ -181,9 +214,9 @@ function ProjetoModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
           </Select>
         </div>
         <div>
-          <label className="label">Cliente</label>
+          <label className="label">Cliente *</label>
           <Select value={form.clienteId} onChange={(e) => setForm((f) => ({ ...f, clienteId: e.target.value }))}>
-            <option value="">Sem cliente</option>
+            <option value="">Selecione um cliente</option>
             {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </Select>
         </div>

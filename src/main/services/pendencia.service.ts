@@ -16,7 +16,7 @@ import {
 } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { criarNotificacao, notificacaoDesktop } from './notificacao.service'
-import { parseISO } from 'date-fns'
+import { isValid, parseISO } from 'date-fns'
 
 export const pendenciaInclude = {
   criador: { select: { id: true, nome: true, avatar: true } },
@@ -50,11 +50,11 @@ function escopoEquipe(ctx: ApiContext, filtroEquipeId?: string) {
 const PendenciaCreateSchema = z.object({
   titulo: z.string().min(1, 'Título é obrigatório').max(200),
   descricao: z.string().max(5000).optional().nullable(),
-  clienteId: z.string().optional().nullable(),
-  projetoId: z.string().optional().nullable(),
+  clienteId: z.string().min(1, 'Cliente é obrigatório'),
+  projetoId: z.string().min(1, 'Projeto é obrigatório'),
   sistema: z.string().max(120).optional().nullable(),
-  responsavelId: z.string().optional().nullable(),
-  prazo: z.string().optional().nullable(),
+  responsavelId: z.string().min(1, 'Responsável é obrigatório'),
+  prazo: z.string().min(1, 'Prazo é obrigatório'),
   horario: z.string().regex(/^\d{2}:\d{2}$/, 'Horário inválido').optional().nullable(),
   prioridade: z.enum(PRIORIDADES as [Prioridade, ...Prioridade[]]).default('NORMAL'),
   categoriaId: z.string().optional().nullable(),
@@ -71,6 +71,10 @@ const PendenciaCreateSchema = z.object({
 })
 
 const PendenciaUpdateSchema = PendenciaCreateSchema.partial().omit({ checklist: true, recorrencia: true }).extend({
+  clienteId: z.string().min(1).optional().nullable(),
+  projetoId: z.string().min(1).optional().nullable(),
+  responsavelId: z.string().min(1).optional().nullable(),
+  prazo: z.string().min(1).optional().nullable(),
   recorrencia: z
     .object({ tipo: z.enum(['diaria', 'semanal', 'mensal', 'trimestral', 'anual']), intervalo: z.number().int().min(1).default(1), ativo: z.boolean().default(true) })
     .optional()
@@ -197,6 +201,9 @@ export async function obterPendencia(ctx: ApiContext, args: Record<string, unkno
 export async function criarPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const parsed = PendenciaCreateSchema.parse(args)
+  const hoje = new Date().toISOString().slice(0, 10)
+  if (!isValid(parseISO(parsed.prazo))) throw new AppError('Prazo inválido')
+  if (parsed.prazo < hoje) throw new AppError('O prazo deve ser hoje ou uma data futura')
   // Equipe da pendência: herda a equipe do usuário criador. Acesso global (ADM/GESTOR)
   // pode escolher a equipe no momento da criação; usuário comum fica na própria equipe.
   const equipeEscolhida = temAcessoGlobal(ctx)
@@ -264,6 +271,10 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
   const id = String(args.id || '')
   if (!id) throw new AppError('ID da pendência é obrigatório')
   const parsed = PendenciaUpdateSchema.parse(args)
+  if (parsed.prazo) {
+    if (!isValid(parseISO(parsed.prazo))) throw new AppError('Prazo inválido')
+    if (parsed.prazo < new Date().toISOString().slice(0, 10)) throw new AppError('O prazo deve ser hoje ou uma data futura')
+  }
   const anterior = await carregarComAcesso(ctx, id)
 
   let transferenciaEquipe: { origemNome: string; destinoNome: string } | null = null
@@ -555,6 +566,9 @@ export async function alterarPrazo(ctx: ApiContext, args: Record<string, unknown
   const db = getPrisma()
   const id = String(args.id || '')
   const prazo = args.prazo ? parseISO(String(args.prazo)) : null
+  if (prazo && prazo.toISOString().slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+    throw new AppError('O prazo deve ser hoje ou uma data futura')
+  }
   const horario = args.horario ? String(args.horario) : null
   const p = await carregarComAcesso(ctx, id)
   await db.pendencia.update({ where: { id }, data: { prazo, horario } })

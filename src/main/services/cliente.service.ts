@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { USUARIO_RESUMO } from './resumo'
-import { AppError } from '../auth'
+import { AppError, requireEmpresa } from '../auth'
 import type { ApiContext, DadosClienteDetail } from '@shared/types'
 import { deepIso, isAtrasada } from '../helpers'
 import { registrarHistorico } from './historico.service'
@@ -19,12 +19,14 @@ const ClienteSchema = z.object({
   observacoes: z.string().max(2000).optional().nullable()
 })
 
-export async function listarClientes(args: Record<string, unknown>): Promise<unknown> {
+export async function listarClientes(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const busca = args.busca ? String(args.busca).toLowerCase() : ''
   const ativo = args.ativo !== false
   const itens = await db.cliente.findMany({
     where: {
+      empresaId,
       ativo,
       ...(busca
         ? {
@@ -55,19 +57,21 @@ export async function listarClientes(args: Record<string, unknown>): Promise<unk
   return deepIso(comDados)
 }
 
-export async function obterCliente(args: Record<string, unknown>): Promise<unknown> {
+export async function obterCliente(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
   const c = await db.cliente.findUnique({ where: { id } })
   if (!c) throw new AppError('Cliente não encontrado', 404)
+  if (c.empresaId !== ctx.empresaId) throw new AppError('Cliente não encontrado', 404)
   return deepIso(c)
 }
 
 export async function detalheCliente(ctx: ApiContext, args: Record<string, unknown>): Promise<DadosClienteDetail> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
   const cliente = await db.cliente.findUnique({ where: { id } })
-  if (!cliente) throw new AppError('Cliente não encontrado', 404)
+  if (!cliente || cliente.empresaId !== empresaId) throw new AppError('Cliente não encontrado', 404)
 
   const pendencias = await db.pendencia.findMany({
     where: { clienteId: id },
@@ -94,7 +98,7 @@ export async function detalheCliente(ctx: ApiContext, args: Record<string, unkno
     orderBy: { dataPrevista: 'desc' }
   })
   const notas = await db.nota.findMany({
-    where: { clienteId: id },
+    where: { clienteId: id, usuarioId: ctx.usuarioId },
     include: { usuario: true },
     orderBy: { atualizadoEm: 'desc' }
   })
@@ -112,6 +116,7 @@ export async function detalheCliente(ctx: ApiContext, args: Record<string, unkno
 }
 
 export async function criarCliente(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const parsed = ClienteSchema.parse(args)
   const db = getPrisma()
   const c = await db.cliente.create({
@@ -126,7 +131,7 @@ export async function criarCliente(ctx: ApiContext, args: Record<string, unknown
       projeto: parsed.projeto || null,
       responsavelInterno: parsed.responsavelInterno || null,
       observacoes: parsed.observacoes || null,
-      empresaId: ctx.empresaId
+      empresaId
     }
   })
   await registrarHistorico({
@@ -146,6 +151,7 @@ export async function atualizarCliente(ctx: ApiContext, args: Record<string, unk
   const db = getPrisma()
   const existente = await db.cliente.findUnique({ where: { id } })
   if (!existente) throw new AppError('Cliente não encontrado', 404)
+  if (existente.empresaId !== ctx.empresaId) throw new AppError('Cliente não encontrado', 404)
   const c = await db.cliente.update({
     where: { id },
     data: {

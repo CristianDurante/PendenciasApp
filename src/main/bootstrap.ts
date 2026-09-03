@@ -21,10 +21,13 @@ export async function ensureBootstrap(): Promise<void> {
       }
     })
     const empresa = await db.empresa.findFirst()
-    if (!empresa) {
-      await db.empresa.create({ data: { nome: 'Minha Empresa', ativo: true } })
-    }
+    if (empresa) await db.usuario.update({ where: { email }, data: { empresaId: empresa.id } })
     console.log(`[bootstrap] Usuário administrador inicial criado (${email})`)
+  }
+
+  const empresaUnica = await db.empresa.findFirst()
+  if (empresaUnica) {
+    await db.usuario.updateMany({ where: { empresaId: null }, data: { empresaId: empresaUnica.id } })
   }
 
   const catCount = await db.categoria.count()

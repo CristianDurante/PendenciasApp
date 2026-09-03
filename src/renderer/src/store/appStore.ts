@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DadosDashboard, LoginResult, Pendencia, SessaoInfo, Usuario } from '@shared/types'
+import type { ConfigApp, DadosDashboard, LoginResult, Pendencia, SessaoInfo, Usuario } from '@shared/types'
 import { call, getToken, setToken } from '../lib/api'
 
 export interface Toast {
@@ -22,6 +22,7 @@ interface AppState {
   painelNotificacoes: boolean
   dashboard: DadosDashboard | null
   dashboardLoading: boolean
+  modulosSidebar: ConfigApp['modulosSidebar']
   dataVersao: number
 
   login: (email: string, senha: string) => Promise<void>
@@ -38,6 +39,7 @@ interface AppState {
   setPainelNotificacoes: (v: boolean) => void
   carregarDashboard: (forcar?: boolean, equipeId?: string) => Promise<void>
   atualizarPendenciaNoState: (p: Pendencia) => void
+  definirModulosSidebar: (modulos: ConfigApp['modulosSidebar']) => void
   notificarMudanca: () => void
 }
 
@@ -60,6 +62,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   painelNotificacoes: false,
   dashboard: null,
   dashboardLoading: false,
+  modulosSidebar: undefined,
   dataVersao: 0,
 
   login: async (email, senha) => {
@@ -145,6 +148,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         : null
     }))
   },
+
+  definirModulosSidebar: (modulos) => set({ modulosSidebar: modulos }),
 
   notificarMudanca: () => set((s) => ({ dataVersao: s.dataVersao + 1 }))
 }))

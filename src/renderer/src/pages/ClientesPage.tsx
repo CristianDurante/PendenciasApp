@@ -120,9 +120,6 @@ function ClienteModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
         contato: editando.contato || '',
         email: editando.email || '',
         telefone: editando.telefone || '',
-        sistema: editando.sistema || '',
-        projeto: editando.projeto || '',
-        responsavelInterno: editando.responsavelInterno || '',
         observacoes: editando.observacoes || ''
       } : {})
       setErro('')
@@ -174,18 +171,6 @@ function ClienteModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
         <div>
           <label className="label">Telefone</label>
           <Input value={form.telefone || ''} onChange={(e) => set('telefone', e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Sistema</label>
-          <Input value={form.sistema || ''} onChange={(e) => set('sistema', e.target.value)} placeholder="ERP, PDV, sistema usado…" />
-        </div>
-        <div>
-          <label className="label">Projeto</label>
-          <Input value={form.projeto || ''} onChange={(e) => set('projeto', e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Responsável interno</label>
-          <Input value={form.responsavelInterno || ''} onChange={(e) => set('responsavelInterno', e.target.value)} />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Observações</label>

@@ -6,15 +6,15 @@ import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 
 const NotaSchema = z.object({
-  titulo: z.string().min(1, 'Título é obrigatório').max(120),
-  conteudo: z.string().max(10000).optional().nullable(),
+  titulo: z.string().max(120).optional().nullable(),
+  conteudo: z.string().max(100000).optional().nullable(),
   clienteId: z.string().optional().nullable(),
   projetoId: z.string().optional().nullable(),
   pendenciaId: z.string().optional().nullable(),
   compromissoId: z.string().optional().nullable()
 })
 
-export async function listarNotas(args: Record<string, unknown>): Promise<unknown> {
+export async function listarNotas(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const busca = args.busca ? String(args.busca).toLowerCase() : ''
   const clienteId = args.clienteId ? String(args.clienteId) : ''
@@ -23,6 +23,7 @@ export async function listarNotas(args: Record<string, unknown>): Promise<unknow
   const compromissoId = args.compromissoId ? String(args.compromissoId) : ''
   const itens = await db.nota.findMany({
     where: {
+      usuarioId: ctx.usuarioId,
       ...(busca ? { OR: [{ titulo: { contains: busca } }, { conteudo: { contains: busca } }] } : {}),
       ...(clienteId ? { clienteId } : {}),
       ...(projetoId ? { projetoId } : {}),
@@ -35,20 +36,22 @@ export async function listarNotas(args: Record<string, unknown>): Promise<unknow
   return deepIso(itens)
 }
 
-export async function obterNota(args: Record<string, unknown>): Promise<unknown> {
+export async function obterNota(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const id = String(args.id || '')
   const n = await db.nota.findUnique({ where: { id }, include: { usuario: true, cliente: true } })
   if (!n) throw new AppError('Nota não encontrada', 404)
+  if (n.usuarioId !== ctx.usuarioId) throw new AppError('Sem permissão', 403)
   return deepIso(n)
 }
 
 export async function criarNota(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const parsed = NotaSchema.parse(args)
   const db = getPrisma()
+  const titulo = parsed.titulo?.trim() || parsed.conteudo?.trim().split('\n')[0].slice(0, 120) || 'Nota sem título'
   const n = await db.nota.create({
     data: {
-      titulo: parsed.titulo,
+      titulo,
       conteudo: parsed.conteudo || null,
       clienteId: parsed.clienteId || null,
       projetoId: parsed.projetoId || null,
@@ -76,10 +79,11 @@ export async function atualizarNota(ctx: ApiContext, args: Record<string, unknow
   const existente = await db.nota.findUnique({ where: { id } })
   if (!existente) throw new AppError('Nota não encontrada', 404)
   if (existente.usuarioId !== ctx.usuarioId && !ctx.isAdmin) throw new AppError('Sem permissão', 403)
+  const titulo = parsed.titulo?.trim() || parsed.conteudo?.trim().split('\n')[0].slice(0, 120) || 'Nota sem título'
   const n = await db.nota.update({
     where: { id },
     data: {
-      ...(parsed.titulo !== undefined ? { titulo: parsed.titulo } : {}),
+      ...(parsed.titulo !== undefined || parsed.conteudo !== undefined ? { titulo } : {}),
       ...(parsed.conteudo !== undefined ? { conteudo: parsed.conteudo || null } : {}),
       ...(parsed.clienteId !== undefined ? { clienteId: parsed.clienteId || null } : {}),
       ...(parsed.projetoId !== undefined ? { projetoId: parsed.projetoId || null } : {}),

@@ -23,6 +23,7 @@ model Empresa {
 
   usuarios  Usuario[]
   clientes  Cliente[]
+  equipes   Equipe[]
 
   @@map("empresas")
 }
@@ -33,14 +34,17 @@ model Equipe {
   descricao   String?
   liderId     String?
   ativo       Boolean  @default(true)
+  empresaId   String?
   criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
+  empresa    Empresa?    @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   lider      Usuario?    @relation("EquipeLider", fields: [liderId], references: [id], onDelete: SetNull)
   usuarios   Usuario[]   @relation("EquipeUsuarios")
   pendencias Pendencia[]
 
   @@index([liderId])
+  @@index([empresaId])
   @@map("equipes")
 }
 

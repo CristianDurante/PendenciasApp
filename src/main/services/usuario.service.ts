@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
-import { AppError, hashPassword, requireAdminOrGestor, requireRoles, obterUsuarioPorId } from '../auth'
+import { AppError, hashPassword, requireAdminOrGestor, requireRoles, obterUsuarioPorId, requireEmpresa } from '../auth'
 import type { ApiContext, Perfil } from '@shared/types'
 import { PERFIS } from '@shared/constants'
 import { deepIso } from '../helpers'
@@ -65,8 +65,9 @@ async function resolverEquipeId(db: ReturnType<typeof getPrisma>, equipeId: stri
 
 export async function listarUsuarios(ctx: ApiContext): Promise<unknown> {
   requireAdminOrGestor(ctx)
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
-  const itens = await db.usuario.findMany({ select, orderBy: { nome: 'asc' } })
+  const itens = await db.usuario.findMany({ where: { empresaId }, select, orderBy: { nome: 'asc' } })
   return deepIso(itens)
 }
 
@@ -80,6 +81,7 @@ export async function obterUsuario(ctx: ApiContext, args: Record<string, unknown
 
 export async function criarUsuario(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   requireAdminOrGestor(ctx)
+  const empresaId = requireEmpresa(ctx)
   const parsed = UsuarioCreateSchema.parse(args)
   const db = getPrisma()
   const email = parsed.email.trim().toLowerCase()
@@ -93,7 +95,7 @@ export async function criarUsuario(ctx: ApiContext, args: Record<string, unknown
       perfil: parsed.perfil,
       cargo: parsed.cargo || null,
       telefone: parsed.telefone || null,
-      empresaId: ctx.empresaId,
+      empresaId,
       equipeId: await resolverEquipeId(db, parsed.equipeId)
     },
     select
@@ -120,6 +122,7 @@ export async function atualizarUsuario(ctx: ApiContext, args: Record<string, unk
   const db = getPrisma()
   const existente = await db.usuario.findUnique({ where: { id } })
   if (!existente) throw new AppError('Usuário não encontrado', 404)
+  if (existente.empresaId !== ctx.empresaId) throw new AppError('Usuário não encontrado', 404)
   if (parsed.email) {
     const email = parsed.email.trim().toLowerCase()
     const duplicado = await db.usuario.findFirst({ where: { email, id: { not: id } } })

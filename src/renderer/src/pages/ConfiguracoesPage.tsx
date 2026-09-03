@@ -9,6 +9,7 @@ import {
   Database,
   Moon,
   Bell,
+  PanelLeft,
   Plus,
   Pencil,
   Trash2,
@@ -28,7 +29,7 @@ import { call } from '../lib/api'
 import { cn, formatarDataHora, formatarTamanho, hexContraste } from '../lib/format'
 import { Button, Input, Textarea, Select, Switch, Modal, ConfirmDialog, Avatar, PerfilBadge, EmptyState, Loading } from '../components/ui'
 
-type Aba = 'perfil' | 'empresa' | 'usuarios' | 'equipes' | 'categorias' | 'tags' | 'notificacoes' | 'backup' | 'aparencia'
+type Aba = 'perfil' | 'empresa' | 'usuarios' | 'equipes' | 'categorias' | 'tags' | 'notificacoes' | 'modulos' | 'backup' | 'aparencia'
 
 const NOTIF_PADRAO: NonNullable<ConfigApp['notificacoes']> = {
   desktop: true,
@@ -47,6 +48,7 @@ const ABAS: Array<{ id: Aba; rotulo: string; icone: ReactNode }> = [
   { id: 'categorias', rotulo: 'Categorias', icone: <FolderOpen className="h-4 w-4" /> },
   { id: 'tags', rotulo: 'Tags', icone: <TagsIcon className="h-4 w-4" /> },
   { id: 'notificacoes', rotulo: 'Notificações', icone: <Bell className="h-4 w-4" /> },
+  { id: 'modulos', rotulo: 'Abas laterais', icone: <PanelLeft className="h-4 w-4" /> },
   { id: 'backup', rotulo: 'Backup', icone: <Database className="h-4 w-4" /> },
   { id: 'aparencia', rotulo: 'Aparência', icone: <Moon className="h-4 w-4" /> }
 ]
@@ -62,6 +64,7 @@ export function ConfiguracoesPage(): ReactNode {
     if (a.id === 'usuarios' || a.id === 'categorias' || a.id === 'tags' || a.id === 'notificacoes' || a.id === 'backup') {
       return ehAdmin || ehGestor
     }
+    if (a.id === 'modulos') return ehAdmin
     return true
   })
 
@@ -91,6 +94,7 @@ export function ConfiguracoesPage(): ReactNode {
         {aba === 'categorias' && <CategoriasSection />}
         {aba === 'tags' && <TagsSection />}
         {aba === 'notificacoes' && <NotificacoesSection />}
+        {aba === 'modulos' && <ModulosSidebarSection />}
         {aba === 'backup' && <BackupSection />}
         {aba === 'aparencia' && <AparenciaSection />}
       </div>
@@ -1201,6 +1205,78 @@ function BackupSection(): ReactNode {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+const MODULOS_SIDEBAR_PADRAO: NonNullable<ConfigApp['modulosSidebar']> = {
+  minhasAtividades: true,
+  pendencias: true,
+  kanban: true,
+  calendario: true,
+  compromissos: true,
+  retornos: true,
+  anotacoes: true,
+  clientes: true,
+  projetos: true,
+  relatorios: true,
+  historico: true
+}
+
+function ModulosSidebarSection(): ReactNode {
+  const pushToast = useAppStore((s) => s.pushToast)
+  const definirModulosSidebar = useAppStore((s) => s.definirModulosSidebar)
+  const [modulos, setModulos] = useState(MODULOS_SIDEBAR_PADRAO)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    void call<ConfigApp>('empresa', 'config', {}).then((config) => {
+      setModulos({ ...MODULOS_SIDEBAR_PADRAO, ...(config.modulosSidebar || {}) })
+    })
+  }, [])
+
+  async function salvar(): Promise<void> {
+    setSalvando(true)
+    try {
+      await call('empresa', 'salvarConfig', { patch: { modulosSidebar: modulos } })
+      definirModulosSidebar(modulos)
+      pushToast('sucesso', 'Abas laterais atualizadas')
+    } catch (e) {
+      pushToast('erro', 'Falha ao salvar abas', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const opcoes: Array<{ chave: keyof typeof MODULOS_SIDEBAR_PADRAO; rotulo: string }> = [
+    { chave: 'minhasAtividades', rotulo: 'Minhas Atividades' },
+    { chave: 'pendencias', rotulo: 'Pendências' },
+    { chave: 'kanban', rotulo: 'Kanban' },
+    { chave: 'calendario', rotulo: 'Calendário' },
+    { chave: 'compromissos', rotulo: 'Compromissos' },
+    { chave: 'retornos', rotulo: 'Retornos' },
+    { chave: 'anotacoes', rotulo: 'Anotações' },
+    { chave: 'clientes', rotulo: 'Clientes' },
+    { chave: 'projetos', rotulo: 'Projetos' },
+    { chave: 'relatorios', rotulo: 'Relatórios' },
+    { chave: 'historico', rotulo: 'Histórico' }
+  ]
+
+  return (
+    <div className="max-w-xl space-y-3">
+      <div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Abas laterais</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Escolha quais módulos ficam disponíveis para todos os usuários.</p>
+      </div>
+      <div className="card space-y-3">
+        {opcoes.map((opcao) => (
+          <div key={opcao.chave} className="flex items-center justify-between gap-3">
+            <span className="text-sm text-slate-700 dark:text-slate-300">{opcao.rotulo}</span>
+            <Switch marcado={modulos[opcao.chave]} aoMudar={(valor) => setModulos((atual) => ({ ...atual, [opcao.chave]: valor }))} label={`Mostrar ${opcao.rotulo}`} />
+          </div>
+        ))}
+        <div className="pt-2"><Button onClick={() => void salvar()} carregando={salvando}>Salvar abas</Button></div>
       </div>
     </div>
   )

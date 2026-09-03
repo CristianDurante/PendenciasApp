@@ -395,6 +395,19 @@ export interface DadosDashboard {
 }
 
 export interface ConfigApp {
+  modulosSidebar?: {
+    minhasAtividades: boolean
+    pendencias: boolean
+    kanban: boolean
+    calendario: boolean
+    compromissos: boolean
+    retornos: boolean
+    anotacoes: boolean
+    clientes: boolean
+    projetos: boolean
+    relatorios: boolean
+    historico: boolean
+  }
   tema?: 'light' | 'dark' | 'system'
   notificacoes?: {
     desktop: boolean
