@@ -20,6 +20,7 @@ import { cn } from '../../lib/format'
 import { useAppStore } from '../../store/appStore'
 import { Avatar } from '../ui'
 import { BrandLogo } from './BrandLogo'
+import { PERFIL_LABEL } from '@shared/constants'
 
 const itens = [
   { to: '/', label: 'Dashboard', icone: <LayoutDashboard className="h-4.5 w-4.5 h-[18px] w-[18px]" /> },
@@ -92,7 +93,7 @@ export function Sidebar(): ReactNode {
           <Avatar nome={sessao?.usuario.nome} tamanho={32} />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{sessao?.usuario.nome}</p>
-            <p className="truncate text-[11px] text-slate-400">{sessao?.usuario.perfil}</p>
+            <p className="truncate text-[11px] text-slate-400">{sessao?.usuario.perfil ? PERFIL_LABEL[sessao.usuario.perfil] : ''}</p>
           </div>
         </div>
       </div>

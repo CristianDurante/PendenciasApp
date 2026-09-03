@@ -11,8 +11,8 @@ export const PERFIS: Perfil[] = ['ADMIN', 'GESTOR', 'USUARIO']
 
 export const PERFIL_LABEL: Record<Perfil, string> = {
   ADMIN: 'Administrador',
-  GESTOR: 'Gestor',
-  USUARIO: 'Usuário'
+  GESTOR: 'Gestor de Projetos (GP)',
+  USUARIO: 'Consultor'
 }
 
 export const PRIORIDADES: Prioridade[] = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE']
