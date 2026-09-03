@@ -41,19 +41,21 @@ export async function listarClientes(ctx: ApiContext, args: Record<string, unkno
     },
     orderBy: { nome: 'asc' }
   })
-  const comDados = await Promise.all(
-    itens.map(async (c) => {
-      const abertas = await db.pendencia.count({
-        where: { clienteId: c.id, status: { notIn: ['CONCLUIDA', 'CANCELADA'] } }
-      })
-      const pendencias = await db.pendencia.findMany({
-        where: { clienteId: c.id },
-        select: { prazo: true, status: true }
-      })
-      const atrasadas = pendencias.filter((p) => isAtrasada(p.prazo, p.status)).length
-      return { ...c, pendenciasAbertas: abertas, pendenciasAtrasadas: atrasadas }
-    })
-  )
+  const pendencias = await db.pendencia.findMany({
+    where: { clienteId: { in: itens.map((c) => c.id) } },
+    select: { clienteId: true, prazo: true, status: true }
+  })
+  const contadores = new Map<string, { abertas: number; atrasadas: number }>()
+  for (const p of pendencias) {
+    if (!p.clienteId) continue
+    const atual = contadores.get(p.clienteId) || { abertas: 0, atrasadas: 0 }
+    if (p.status !== 'CONCLUIDA' && p.status !== 'CANCELADA') {
+      atual.abertas += 1
+      if (isAtrasada(p.prazo, p.status)) atual.atrasadas += 1
+    }
+    contadores.set(p.clienteId, atual)
+  }
+  const comDados = itens.map((c) => ({ ...c, pendenciasAbertas: contadores.get(c.id)?.abertas || 0, pendenciasAtrasadas: contadores.get(c.id)?.atrasadas || 0 }))
   return deepIso(comDados)
 }
 
@@ -183,11 +185,13 @@ export async function excluirCliente(ctx: ApiContext, args: Record<string, unkno
   const db = getPrisma()
   const existente = await db.cliente.findUnique({ where: { id } })
   if (!existente) throw new AppError('Cliente não encontrado', 404)
-  await db.pendencia.updateMany({ where: { clienteId: id }, data: { clienteId: null } })
-  await db.compromisso.updateMany({ where: { clienteId: id }, data: { clienteId: null } })
-  await db.retorno.updateMany({ where: { clienteId: id }, data: { clienteId: null } })
-  await db.nota.updateMany({ where: { clienteId: id }, data: { clienteId: null } })
-  await db.cliente.update({ where: { id }, data: { ativo: false } })
+  await db.$transaction([
+    db.pendencia.updateMany({ where: { clienteId: id }, data: { clienteId: null } }),
+    db.compromisso.updateMany({ where: { clienteId: id }, data: { clienteId: null } }),
+    db.retorno.updateMany({ where: { clienteId: id }, data: { clienteId: null } }),
+    db.nota.updateMany({ where: { clienteId: id }, data: { clienteId: null } }),
+    db.cliente.update({ where: { id }, data: { ativo: false } })
+  ])
   await registrarHistorico({
     entidade: 'cliente',
     entidadeId: id,

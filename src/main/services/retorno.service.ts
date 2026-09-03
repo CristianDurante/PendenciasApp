@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { USUARIO_RESUMO } from './resumo'
-import { AppError } from '../auth'
+import { AppError, requireEmpresa } from '../auth'
 import { RETORNO_STATUS } from '@shared/constants'
 import type { ApiContext, RetornoStatus } from '@shared/types'
 import { deepIso } from '../helpers'
@@ -18,7 +18,8 @@ const RetornoSchema = z.object({
   observacao: z.string().max(2000).optional().nullable()
 })
 
-export async function listarRetornos(args: Record<string, unknown>): Promise<unknown> {
+export async function listarRetornos(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const busca = args.busca ? String(args.busca).toLowerCase() : ''
   const status = args.status ? String(args.status) : ''
@@ -26,6 +27,7 @@ export async function listarRetornos(args: Record<string, unknown>): Promise<unk
   const responsavelId = args.responsavelId ? String(args.responsavelId) : ''
   const itens = await db.retorno.findMany({
     where: {
+      cliente: { empresaId },
       ...(busca ? { OR: [{ assunto: { contains: busca } }, { contato: { contains: busca } }] } : {}),
       ...(status ? { status } : {}),
       ...(clienteId ? { clienteId } : {}),
@@ -38,8 +40,17 @@ export async function listarRetornos(args: Record<string, unknown>): Promise<unk
 }
 
 export async function criarRetorno(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const parsed = RetornoSchema.parse(args)
   const db = getPrisma()
+  if (parsed.clienteId) {
+    const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
+    if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  }
+  if (parsed.responsavelId) {
+    const responsavel = await db.usuario.findFirst({ where: { id: parsed.responsavelId, empresaId }, select: { id: true } })
+    if (!responsavel) throw new AppError('Responsável não encontrado na empresa atual', 404)
+  }
   const r = await db.retorno.create({
     data: {
       clienteId: parsed.clienteId || null,
@@ -64,11 +75,12 @@ export async function criarRetorno(ctx: ApiContext, args: Record<string, unknown
 }
 
 export async function atualizarRetorno(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do retorno é obrigatório')
   const parsed = RetornoSchema.partial().parse(args)
   const db = getPrisma()
-  const existente = await db.retorno.findUnique({ where: { id } })
+  const existente = await db.retorno.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Retorno não encontrado', 404)
   const r = await db.retorno.update({
     where: { id },
@@ -96,11 +108,12 @@ export async function atualizarRetorno(ctx: ApiContext, args: Record<string, unk
 }
 
 export async function alterarStatusRetorno(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   const status = String(args.status || '')
   if (!RETORNO_STATUS.includes(status as RetornoStatus)) throw new AppError('Status inválido')
   const db = getPrisma()
-  const existente = await db.retorno.findUnique({ where: { id } })
+  const existente = await db.retorno.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Retorno não encontrado', 404)
   const r = await db.retorno.update({
     where: { id },
@@ -118,10 +131,11 @@ export async function alterarStatusRetorno(ctx: ApiContext, args: Record<string,
 }
 
 export async function excluirRetorno(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do retorno é obrigatório')
   const db = getPrisma()
-  const existente = await db.retorno.findUnique({ where: { id } })
+  const existente = await db.retorno.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Retorno não encontrado', 404)
   await registrarHistorico({
     entidade: 'retorno',

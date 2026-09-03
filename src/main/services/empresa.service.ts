@@ -37,6 +37,7 @@ export async function criarEmpresa(ctx: ApiContext, args: Record<string, unknown
   })
   if (!ctx.empresaId) {
     await db.usuario.update({ where: { id: ctx.usuarioId }, data: { empresaId: e.id } })
+    await db.equipe.updateMany({ where: { empresaId: null }, data: { empresaId: e.id } })
   }
   if (ctx.empresaId) {
     await registrarHistorico({

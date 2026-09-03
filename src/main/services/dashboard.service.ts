@@ -1,5 +1,5 @@
 import { getPrisma } from '../db'
-import { temAcessoGlobal } from '../auth'
+import { requireEmpresa, temAcessoGlobal } from '../auth'
 import type { ApiContext, DadosDashboard } from '@shared/types'
 import { deepIso, isAtrasada, dataInicioDoDia, dataFimDoDia, addDias } from '../helpers'
 import { pendenciaInclude } from './pendencia.service'
@@ -10,6 +10,7 @@ function conta(lista: Array<{ prazo: Date | null; status: string }>, cond: (praz
 }
 
 export async function obterDashboard(ctx: ApiContext, args: Record<string, unknown> = {}): Promise<DadosDashboard> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const hojeInicio = dataInicioDoDia()
   const hojeFim = dataFimDoDia()
@@ -19,7 +20,7 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
     !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : temAcessoGlobal(ctx) && args.equipeId ? { equipeId: String(args.equipeId) } : {}
 
   const todas = await db.pendencia.findMany({
-    where: ondeEquipe,
+    where: { ...ondeEquipe, criador: { empresaId } },
     include: {
       cliente: true,
       projeto: true,
@@ -90,7 +91,7 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
     .slice(0, 8)
 
   const retornos = await db.retorno.findMany({
-    where: { status: { in: ['PENDENTE', 'EM_CONTATO', 'AGUARDANDO_CLIENTE'] } },
+    where: { cliente: { empresaId }, status: { in: ['PENDENTE', 'EM_CONTATO', 'AGUARDANDO_CLIENTE'] } },
     include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true } } },
     orderBy: [{ dataPrevista: 'asc' }]
   })
@@ -98,12 +99,12 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
   const retornosAtrasados = retornos.filter((r) => r.dataPrevista && r.dataPrevista < hojeInicio)
 
   const compromissosHoje = await db.compromisso.findMany({
-    where: { data: { gte: hojeInicio, lte: hojeFim }, status: { in: ['AGENDADO', 'CONFIRMADO'] } },
+    where: { cliente: { empresaId }, data: { gte: hojeInicio, lte: hojeFim }, status: { in: ['AGENDADO', 'CONFIRMADO'] } },
     include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true, avatar: true } } },
     orderBy: [{ horaInicio: 'asc' }]
   })
   const proximosCompromissos = await db.compromisso.findMany({
-    where: { data: { gt: hojeFim, lte: proxFim }, status: { in: ['AGENDADO', 'CONFIRMADO'] } },
+    where: { cliente: { empresaId }, data: { gt: hojeFim, lte: proxFim }, status: { in: ['AGENDADO', 'CONFIRMADO'] } },
     include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true, avatar: true } } },
     orderBy: [{ data: 'asc' }, { horaInicio: 'asc' }],
     take: 10

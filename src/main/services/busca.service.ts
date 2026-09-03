@@ -2,8 +2,10 @@ import { getPrisma } from '../db'
 import { temAcessoGlobal } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
+import { requireEmpresa } from '../auth'
 
 export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const termo = String(args.q || '').trim().toLowerCase()
   if (termo.length < 1) return { vazio: true }
@@ -15,6 +17,7 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
     db.pendencia.findMany({
       where: {
         ...ondeEquipe,
+        criador: { empresaId },
         OR: [
           { titulo: { contains: termo } },
           { descricao: { contains: termo } },
@@ -28,6 +31,7 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
     }),
     db.cliente.findMany({
       where: {
+        empresaId,
         OR: [
           { nome: { contains: termo } },
           { empresa: { contains: termo } },
@@ -39,19 +43,20 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       take: limite
     }),
     db.projeto.findMany({
-      where: { OR: [{ nome: { contains: termo } }, { descricao: { contains: termo } }] },
+      where: { cliente: { empresaId }, OR: [{ nome: { contains: termo } }, { descricao: { contains: termo } }] },
       include: { cliente: true },
       orderBy: { nome: 'asc' },
       take: limite
     }),
     db.nota.findMany({
-      where: { OR: [{ titulo: { contains: termo } }, { conteudo: { contains: termo } }] },
+      where: { usuario: { empresaId }, OR: [{ titulo: { contains: termo } }, { conteudo: { contains: termo } }] },
       include: { cliente: true },
       orderBy: { atualizadoEm: 'desc' },
       take: limite
     }),
     db.compromisso.findMany({
       where: {
+        cliente: { empresaId },
         OR: [
           { titulo: { contains: termo } },
           { descricao: { contains: termo } },
@@ -64,7 +69,7 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       take: limite
     }),
     db.retorno.findMany({
-      where: { OR: [{ assunto: { contains: termo } }, { contato: { contains: termo } }] },
+      where: { cliente: { empresaId }, OR: [{ assunto: { contains: termo } }, { contato: { contains: termo } }] },
       include: { cliente: true },
       orderBy: { criadoEm: 'desc' },
       take: limite

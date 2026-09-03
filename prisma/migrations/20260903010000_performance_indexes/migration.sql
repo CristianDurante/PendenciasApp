@@ -1,0 +1,13 @@
+CREATE INDEX "usuarios_empresaId_idx" ON "usuarios"("empresaId");
+CREATE INDEX "clientes_empresaId_ativo_idx" ON "clientes"("empresaId", "ativo");
+CREATE INDEX "pendencias_criadorId_idx" ON "pendencias"("criadorId");
+CREATE INDEX "comentarios_pendenciaId_idx" ON "comentarios"("pendenciaId");
+CREATE INDEX "anexos_pendenciaId_idx" ON "anexos"("pendenciaId");
+CREATE INDEX "checklist_items_pendenciaId_idx" ON "checklist_items"("pendenciaId");
+CREATE INDEX "notas_usuarioId_atualizadoEm_idx" ON "notas"("usuarioId", "atualizadoEm");
+CREATE INDEX "compromissos_clienteId_data_idx" ON "compromissos"("clienteId", "data");
+CREATE INDEX "compromissos_responsavelId_data_idx" ON "compromissos"("responsavelId", "data");
+CREATE INDEX "retornos_clienteId_dataPrevista_idx" ON "retornos"("clienteId", "dataPrevista");
+CREATE INDEX "retornos_responsavelId_status_idx" ON "retornos"("responsavelId", "status");
+CREATE INDEX "notificacoes_usuarioId_lida_criadoEm_idx" ON "notificacoes"("usuarioId", "lida", "criadoEm");
+CREATE INDEX "lembretes_usuarioId_disparado_dataHora_idx" ON "lembretes"("usuarioId", "disparado", "dataHora");

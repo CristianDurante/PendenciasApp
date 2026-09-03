@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { USUARIO_RESUMO } from './resumo'
-import { AppError } from '../auth'
+import { AppError, requireEmpresa } from '../auth'
 import { COMPROMISSO_STATUS, LEMBRETES_OPCOES } from '@shared/constants'
 import type { ApiContext, CompromissoStatus } from '@shared/types'
 import { deepIso, dataInicioDoDia, dataFimDoDia } from '../helpers'
@@ -31,7 +31,8 @@ function validarLembrete(min: number | null): number | null {
   return min
 }
 
-export async function listarCompromissos(args: Record<string, unknown>): Promise<unknown> {
+export async function listarCompromissos(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const busca = args.busca ? String(args.busca).toLowerCase() : ''
   const clienteId = args.clienteId ? String(args.clienteId) : ''
@@ -39,6 +40,7 @@ export async function listarCompromissos(args: Record<string, unknown>): Promise
   const ate = args.ate ? parseISO(String(args.ate)) : null
   const itens = await db.compromisso.findMany({
     where: {
+      cliente: { empresaId },
       ...(busca
         ? { OR: [{ titulo: { contains: busca } }, { descricao: { contains: busca } }, { local: { contains: busca } }] }
         : {}),
@@ -52,18 +54,28 @@ export async function listarCompromissos(args: Record<string, unknown>): Promise
   return deepIso(itens)
 }
 
-export async function obterCompromisso(args: Record<string, unknown>): Promise<unknown> {
+export async function obterCompromisso(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
-  const c = await db.compromisso.findUnique({ where: { id }, include: { cliente: true, responsavel: { select: USUARIO_RESUMO } } })
+  const c = await db.compromisso.findFirst({ where: { id, cliente: { empresaId } }, include: { cliente: true, responsavel: { select: USUARIO_RESUMO } } })
   if (!c) throw new AppError('Compromisso não encontrado', 404)
   return deepIso(c)
 }
 
 export async function criarCompromisso(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const parsed = CompromissoSchema.parse(args)
   const lembreteMinutos = validarLembrete(parsed.lembreteMinutos ?? null)
   const db = getPrisma()
+  if (parsed.clienteId) {
+    const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
+    if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  }
+  if (parsed.responsavelId) {
+    const responsavel = await db.usuario.findFirst({ where: { id: parsed.responsavelId, empresaId }, select: { id: true } })
+    if (!responsavel) throw new AppError('Responsável não encontrado na empresa atual', 404)
+  }
   const c = await db.compromisso.create({
     data: {
       titulo: parsed.titulo,
@@ -114,12 +126,13 @@ export async function criarCompromisso(ctx: ApiContext, args: Record<string, unk
 }
 
 export async function atualizarCompromisso(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do compromisso é obrigatório')
   const parsed = CompromissoSchema.partial().parse(args)
   const lembreteMinutos = parsed.lembreteMinutos !== undefined ? validarLembrete(parsed.lembreteMinutos ?? null) : undefined
   const db = getPrisma()
-  const existente = await db.compromisso.findUnique({ where: { id } })
+  const existente = await db.compromisso.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Compromisso não encontrado', 404)
   const c = await db.compromisso.update({
     where: { id },
@@ -165,11 +178,12 @@ export async function atualizarCompromisso(ctx: ApiContext, args: Record<string,
 }
 
 export async function alterarStatusCompromisso(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   const status = String(args.status || '')
   if (!COMPROMISSO_STATUS.includes(status as CompromissoStatus)) throw new AppError('Status inválido')
   const db = getPrisma()
-  const existente = await db.compromisso.findUnique({ where: { id } })
+  const existente = await db.compromisso.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Compromisso não encontrado', 404)
   const c = await db.compromisso.update({ where: { id }, data: { status } })
   await registrarHistorico({
@@ -183,10 +197,11 @@ export async function alterarStatusCompromisso(ctx: ApiContext, args: Record<str
 }
 
 export async function excluirCompromisso(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do compromisso é obrigatório')
   const db = getPrisma()
-  const existente = await db.compromisso.findUnique({ where: { id } })
+  const existente = await db.compromisso.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Compromisso não encontrado', 404)
   await db.lembrete.deleteMany({ where: { entidade: 'compromisso', entidadeId: id } })
   await registrarHistorico({
@@ -200,20 +215,20 @@ export async function excluirCompromisso(ctx: ApiContext, args: Record<string, u
   return { ok: true }
 }
 
-export async function compromissosNoIntervalo(args: Record<string, unknown>): Promise<unknown> {
+export async function compromissosNoIntervalo(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const de = parseISO(String(args.de || ''))
   const ate = parseISO(String(args.ate || ''))
   const itens = await db.compromisso.findMany({
-    where: { data: { gte: dataInicioDoDia(de), lte: dataFimDoDia(ate) } },
+    where: { cliente: { empresaId }, data: { gte: dataInicioDoDia(de), lte: dataFimDoDia(ate) } },
     include: { cliente: { select: { id: true, nome: true } } },
     orderBy: [{ data: 'asc' }, { horaInicio: 'asc' }]
   })
   return deepIso(itens)
 }
 
-export function dispararLembretesCompromisso(): void {
-  void (async () => {
+export async function dispararLembretesCompromisso(): Promise<void> {
     const db = getPrisma()
     const agora = new Date()
     const candidatos = await db.compromisso.findMany({
@@ -236,5 +251,4 @@ export function dispararLembretesCompromisso(): void {
         await db.compromisso.update({ where: { id: c.id }, data: { lembreteDisparado: true } })
       }
     }
-  })()
 }

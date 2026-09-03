@@ -6,15 +6,18 @@ import { backupAutomatico } from './services/backup.service'
 
 let intervaloTimer: NodeJS.Timeout | null = null
 let checagemBackupCount = 0
+let executando = false
 
 export async function tick(): Promise<void> {
+  if (executando) return
+  executando = true
   try {
     await gerarNotificacoesParaTodos()
   } catch (err) {
     console.error('[scheduler] notificações', err)
   }
   try {
-    dispararLembretesCompromisso()
+    await dispararLembretesCompromisso()
   } catch (err) {
     console.error('[scheduler] lembretes', err)
   }
@@ -27,6 +30,7 @@ export async function tick(): Promise<void> {
       console.error('[scheduler] backup', err)
     }
   }
+  executando = false
 }
 
 export function iniciarScheduler(): void {

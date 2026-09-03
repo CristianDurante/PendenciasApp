@@ -12,6 +12,9 @@ const limites = new Map<string, { inicio: number; quantidade: number }>()
 
 function limitarRequisicoes(chave: string, limite: number, janelaMs: number): boolean {
   const agora = Date.now()
+  for (const [entrada, valor] of limites) {
+    if (agora - valor.inicio >= janelaMs) limites.delete(entrada)
+  }
   const atual = limites.get(chave)
   if (!atual || agora - atual.inicio >= janelaMs) {
     limites.set(chave, { inicio: agora, quantidade: 1 })

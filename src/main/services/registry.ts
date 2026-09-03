@@ -76,8 +76,8 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => clienteService.excluirCliente(ctx, a)
   },
   projeto: {
-    listar: (ctx, a) => projetoService.listarProjetos(a),
-    obter: (ctx, a) => projetoService.obterProjeto(a),
+    listar: (ctx, a) => projetoService.listarProjetos(ctx, a),
+    obter: (ctx, a) => projetoService.obterProjeto(ctx, a),
     criar: (ctx, a) => projetoService.criarProjeto(ctx, a),
     atualizar: (ctx, a) => projetoService.atualizarProjeto(ctx, a),
     excluir: (ctx, a) => projetoService.excluirProjeto(ctx, a)
@@ -117,16 +117,16 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => notaService.excluirNota(ctx, a)
   },
   compromisso: {
-    listar: (ctx, a) => compromissoService.listarCompromissos(a),
-    obter: (ctx, a) => compromissoService.obterCompromisso(a),
+    listar: (ctx, a) => compromissoService.listarCompromissos(ctx, a),
+    obter: (ctx, a) => compromissoService.obterCompromisso(ctx, a),
     criar: (ctx, a) => compromissoService.criarCompromisso(ctx, a),
     atualizar: (ctx, a) => compromissoService.atualizarCompromisso(ctx, a),
     status: (ctx, a) => compromissoService.alterarStatusCompromisso(ctx, a),
     excluir: (ctx, a) => compromissoService.excluirCompromisso(ctx, a),
-    intervalo: (ctx, a) => compromissoService.compromissosNoIntervalo(a)
+    intervalo: (ctx, a) => compromissoService.compromissosNoIntervalo(ctx, a)
   },
   retorno: {
-    listar: (ctx, a) => retornoService.listarRetornos(a),
+    listar: (ctx, a) => retornoService.listarRetornos(ctx, a),
     criar: (ctx, a) => retornoService.criarRetorno(ctx, a),
     atualizar: (ctx, a) => retornoService.atualizarRetorno(ctx, a),
     status: (ctx, a) => retornoService.alterarStatusRetorno(ctx, a),

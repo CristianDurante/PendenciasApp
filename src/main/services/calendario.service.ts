@@ -1,10 +1,11 @@
 import { getPrisma } from '../db'
-import { temAcessoGlobal } from '../auth'
+import { requireEmpresa, temAcessoGlobal } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso, dataInicioDoDia, dataFimDoDia } from '../helpers'
 import { parseISO } from 'date-fns'
 
 export async function eventosCalendario(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const de = parseISO(String(args.de || ''))
   const ate = parseISO(String(args.ate || ''))
@@ -15,17 +16,17 @@ export async function eventosCalendario(ctx: ApiContext, args: Record<string, un
 
   const [pendencias, compromissos, retornos] = await Promise.all([
     db.pendencia.findMany({
-      where: { ...ondeEquipe, prazo: { gte: deInicio, lte: ateFim } },
+      where: { ...ondeEquipe, criador: { empresaId }, prazo: { gte: deInicio, lte: ateFim } },
       include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true } }, tags: { include: { tag: true } } },
       orderBy: { prazo: 'asc' }
     }),
     db.compromisso.findMany({
-      where: { data: { gte: deInicio, lte: ateFim } },
+      where: { cliente: { empresaId }, data: { gte: deInicio, lte: ateFim } },
       include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true } } },
       orderBy: { data: 'asc' }
     }),
     db.retorno.findMany({
-      where: { dataPrevista: { gte: deInicio, lte: ateFim } },
+      where: { cliente: { empresaId }, dataPrevista: { gte: deInicio, lte: ateFim } },
       include: { cliente: { select: { id: true, nome: true } } },
       orderBy: { dataPrevista: 'asc' }
     })

@@ -23,6 +23,7 @@ export function resolveDataDir(): string {
 }
 
 function migrarBancoLegado(dbPath: string): void {
+  if (process.env.PENDENCIAS_SKIP_LEGACY_MIGRATION === '1') return
   const bancoLegado = join(process.cwd(), '.pendify', 'pendify.db')
   if (existsSync(dbPath) || !existsSync(bancoLegado)) return
   mkdirSync(dirname(dbPath), { recursive: true })
@@ -63,11 +64,11 @@ function resolvePrismaBin(): string | null {
   return null
 }
 
-async function runMigration(): Promise<void> {
+async function runMigration(): Promise<boolean> {
   const bin = resolvePrismaBin()
-  if (!bin) return
+  if (!bin) return false
   const schema = join(process.cwd(), 'prisma', 'schema.prisma')
-  if (!existsSync(schema)) return
+  if (!existsSync(schema)) return false
   const dbPath = resolveDbPath()
   const env = { ...process.env, DATABASE_URL: `file:${dbPath}` }
   try {
@@ -80,6 +81,7 @@ async function runMigration(): Promise<void> {
         shell: bin.endsWith('.cmd')
       })
     }
+    return true
   } catch {
     // fallback: db push
     try {
@@ -95,8 +97,9 @@ async function runMigration(): Promise<void> {
           shell: bin.endsWith('.cmd')
         })
       }
+      return true
     } catch {
-      // ignore
+      return false
     }
   }
 }
@@ -128,14 +131,14 @@ export async function ensureDatabase(): Promise<void> {
   migrarBancoLegado(dbPath)
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true })
   if (!existsSync(dbPath)) {
-    await runMigration()
+    if (!(await runMigration())) throw new Error('Não foi possível aplicar as migrations do banco de dados')
   } else {
     const ok = await temTabela('pendencias')
     if (ok) {
-      // Banco existente: aplica migrações pendentes (ex.: codigos_recuperacao, equipes)
-      if (!(await temTabela('equipes'))) await runMigration()
+      // Banco existente: aplica todas as migrations pendentes.
+      if (!(await runMigration())) throw new Error('Não foi possível atualizar o banco de dados')
     } else {
-      await runMigration()
+      if (!(await runMigration())) throw new Error('Não foi possível aplicar as migrations do banco de dados')
     }
   }
   if (!clientTemModelosNecessarios()) {

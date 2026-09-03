@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { USUARIO_RESUMO } from './resumo'
-import { AppError } from '../auth'
+import { AppError, requireEmpresa } from '../auth'
 import { PROJETO_STATUS } from '@shared/constants'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
@@ -17,38 +17,45 @@ const ProjetoSchema = z.object({
   dataFim: z.string().optional().nullable()
 })
 
-export async function listarProjetos(args: Record<string, unknown>): Promise<unknown> {
+export async function listarProjetos(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const busca = args.busca ? String(args.busca).toLowerCase() : ''
   const status = args.status ? String(args.status) : ''
   const itens = await db.projeto.findMany({
     where: {
+      cliente: { empresaId },
       ...(busca ? { OR: [{ nome: { contains: busca } }, { descricao: { contains: busca } }] } : {}),
       ...(status ? { status } : {})
     },
     include: { cliente: true, responsavel: { select: USUARIO_RESUMO } },
     orderBy: { nome: 'asc' }
   })
-  const comDados = await Promise.all(
-    itens.map(async (p) => {
-      const pendencias = await db.pendencia.findMany({
-        where: { projetoId: p.id, status: { notIn: ['CANCELADA'] } },
-        select: { status: true }
-      })
-      const total = pendencias.length
-      const concluidas = pendencias.filter((x) => x.status === 'CONCLUIDA').length
-      const progresso = total === 0 ? 0 : Math.round((concluidas / total) * 100)
-      return { ...p, totalPendencias: total, concluidas, progresso }
-    })
-  )
+  const pendencias = await db.pendencia.findMany({
+    where: { projetoId: { in: itens.map((p) => p.id) }, status: { notIn: ['CANCELADA'] } },
+    select: { projetoId: true, status: true }
+  })
+  const contadores = new Map<string, { total: number; concluidas: number }>()
+  for (const p of pendencias) {
+    if (!p.projetoId) continue
+    const atual = contadores.get(p.projetoId) || { total: 0, concluidas: 0 }
+    atual.total += 1
+    if (p.status === 'CONCLUIDA') atual.concluidas += 1
+    contadores.set(p.projetoId, atual)
+  }
+  const comDados = itens.map((p) => {
+    const atual = contadores.get(p.id) || { total: 0, concluidas: 0 }
+    return { ...p, totalPendencias: atual.total, concluidas: atual.concluidas, progresso: atual.total === 0 ? 0 : Math.round((atual.concluidas / atual.total) * 100) }
+  })
   return deepIso(comDados)
 }
 
-export async function obterProjeto(args: Record<string, unknown>): Promise<unknown> {
+export async function obterProjeto(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const db = getPrisma()
   const id = String(args.id || '')
-  const p = await db.projeto.findUnique({
-    where: { id },
+  const p = await db.projeto.findFirst({
+    where: { id, cliente: { empresaId } },
     include: { cliente: true, responsavel: { select: USUARIO_RESUMO } }
   })
   if (!p) throw new AppError('Projeto não encontrado', 404)
@@ -61,8 +68,15 @@ export async function obterProjeto(args: Record<string, unknown>): Promise<unkno
 }
 
 export async function criarProjeto(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const parsed = ProjetoSchema.parse(args)
   const db = getPrisma()
+  const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
+  if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  if (parsed.responsavelId) {
+    const responsavel = await db.usuario.findFirst({ where: { id: parsed.responsavelId, empresaId }, select: { id: true } })
+    if (!responsavel) throw new AppError('Responsável não encontrado na empresa atual', 404)
+  }
   const p = await db.projeto.create({
     data: {
       nome: parsed.nome,
@@ -85,11 +99,12 @@ export async function criarProjeto(ctx: ApiContext, args: Record<string, unknown
 }
 
 export async function atualizarProjeto(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do projeto é obrigatório')
   const parsed = ProjetoSchema.partial().parse(args)
   const db = getPrisma()
-  const existente = await db.projeto.findUnique({ where: { id } })
+  const existente = await db.projeto.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Projeto não encontrado', 404)
   const p = await db.projeto.update({
     where: { id },
@@ -116,15 +131,18 @@ export async function atualizarProjeto(ctx: ApiContext, args: Record<string, unk
 }
 
 export async function excluirProjeto(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
+  const empresaId = requireEmpresa(ctx)
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do projeto é obrigatório')
   const db = getPrisma()
-  const existente = await db.projeto.findUnique({ where: { id } })
+  const existente = await db.projeto.findFirst({ where: { id, cliente: { empresaId } } })
   if (!existente) throw new AppError('Projeto não encontrado', 404)
-  await db.pendencia.updateMany({ where: { projetoId: id }, data: { projetoId: null } })
-  await db.compromisso.updateMany({ where: { projetoId: id }, data: { projetoId: null } })
-  await db.nota.updateMany({ where: { projetoId: id }, data: { projetoId: null } })
-  await db.projeto.delete({ where: { id } })
+  await db.$transaction([
+    db.pendencia.updateMany({ where: { projetoId: id }, data: { projetoId: null } }),
+    db.compromisso.updateMany({ where: { projetoId: id }, data: { projetoId: null } }),
+    db.nota.updateMany({ where: { projetoId: id }, data: { projetoId: null } }),
+    db.projeto.delete({ where: { id } })
+  ])
   await registrarHistorico({
     entidade: 'projeto',
     entidadeId: id,

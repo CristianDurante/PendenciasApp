@@ -81,6 +81,7 @@ model Usuario {
   historicos   Historico[]
 
   @@index([equipeId])
+  @@index([empresaId])
   @@map("usuarios")
 }
 
@@ -107,6 +108,8 @@ model Cliente {
   compromissos Compromisso[]
   retornos    Retorno[]
   notas       Nota[]
+
+  @@index([empresaId, ativo])
 
   @@map("clientes")
 }
@@ -196,6 +199,7 @@ model Pendencia {
   @@index([projetoId])
   @@index([responsavelId])
   @@index([equipeId])
+  @@index([criadorId])
   @@map("pendencias")
 }
 
@@ -220,6 +224,8 @@ model Comentario {
   pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
   usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([pendenciaId])
+
   @@map("comentarios")
 }
 
@@ -236,6 +242,8 @@ model Anexo {
   pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
   usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([pendenciaId])
+
   @@map("anexos")
 }
 
@@ -248,6 +256,8 @@ model ChecklistItem {
   criadoEm    DateTime @default(now())
 
   pendencia Pendencia @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
+
+  @@index([pendenciaId])
 
   @@map("checklist_items")
 }
@@ -268,6 +278,8 @@ model Nota {
   pendencia  Pendencia?  @relation(fields: [pendenciaId], references: [id], onDelete: Cascade)
   compromisso Compromisso? @relation("NotaCompromisso", fields: [compromissoId], references: [id], onDelete: SetNull)
   usuario    Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, atualizadoEm])
 
   @@map("notas")
 }
@@ -296,6 +308,9 @@ model Compromisso {
   responsavel Usuario? @relation("CompromissoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   notas    Nota[]    @relation("NotaCompromisso")
 
+  @@index([clienteId, data])
+  @@index([responsavelId, data])
+
   @@map("compromissos")
 }
 
@@ -315,6 +330,9 @@ model Retorno {
 
   cliente    Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   responsavel Usuario? @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  @@index([clienteId, dataPrevista])
+  @@index([responsavelId, status])
 
   @@map("retornos")
 }
@@ -347,6 +365,8 @@ model Notificacao {
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([usuarioId, lida, criadoEm])
+
   @@map("notificacoes")
 }
 
@@ -361,6 +381,8 @@ model Lembrete {
   criadoEm    DateTime @default(now())
 
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, disparado, dataHora])
 
   @@map("lembretes")
 }
