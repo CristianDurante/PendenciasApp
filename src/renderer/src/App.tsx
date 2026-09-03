@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAppStore } from './store/appStore'
 import { useCatalogoStore } from './store/catalogoStore'
@@ -10,21 +10,23 @@ import { Topbar } from './components/layout/Topbar'
 import { CommandPalette } from './components/layout/CommandPalette'
 import { NotificationsPanel } from './components/layout/NotificationsPanel'
 import { LoginPage } from './pages/LoginPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { PendenciasPage } from './pages/PendenciasPage'
-import { KanbanPage } from './pages/KanbanPage'
-import { CalendarioPage } from './pages/CalendarioPage'
-import { ClientesPage } from './pages/ClientesPage'
-import { ClienteDetailPage } from './pages/ClienteDetailPage'
-import { ProjetosPage } from './pages/ProjetosPage'
-import { ProjetoDetailPage } from './pages/ProjetoDetailPage'
-import { CompromissosPage } from './pages/CompromissosPage'
-import { RetornosPage } from './pages/RetornosPage'
-import { AnotacoesPage } from './pages/AnotacoesPage'
-import { MinhasAtividadesPage } from './pages/MinhasAtividadesPage'
-import { RelatoriosPage } from './pages/RelatoriosPage'
-import { HistoricoPage } from './pages/HistoricoPage'
-import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
+import { PageSkeleton } from './components/ui'
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })))
+const PendenciasPage = lazy(() => import('./pages/PendenciasPage').then(({ PendenciasPage }) => ({ default: PendenciasPage })))
+const KanbanPage = lazy(() => import('./pages/KanbanPage').then(({ KanbanPage }) => ({ default: KanbanPage })))
+const CalendarioPage = lazy(() => import('./pages/CalendarioPage').then(({ CalendarioPage }) => ({ default: CalendarioPage })))
+const ClientesPage = lazy(() => import('./pages/ClientesPage').then(({ ClientesPage }) => ({ default: ClientesPage })))
+const ClienteDetailPage = lazy(() => import('./pages/ClienteDetailPage').then(({ ClienteDetailPage }) => ({ default: ClienteDetailPage })))
+const ProjetosPage = lazy(() => import('./pages/ProjetosPage').then(({ ProjetosPage }) => ({ default: ProjetosPage })))
+const ProjetoDetailPage = lazy(() => import('./pages/ProjetoDetailPage').then(({ ProjetoDetailPage }) => ({ default: ProjetoDetailPage })))
+const CompromissosPage = lazy(() => import('./pages/CompromissosPage').then(({ CompromissosPage }) => ({ default: CompromissosPage })))
+const RetornosPage = lazy(() => import('./pages/RetornosPage').then(({ RetornosPage }) => ({ default: RetornosPage })))
+const AnotacoesPage = lazy(() => import('./pages/AnotacoesPage').then(({ AnotacoesPage }) => ({ default: AnotacoesPage })))
+const MinhasAtividadesPage = lazy(() => import('./pages/MinhasAtividadesPage').then(({ MinhasAtividadesPage }) => ({ default: MinhasAtividadesPage })))
+const RelatoriosPage = lazy(() => import('./pages/RelatoriosPage').then(({ RelatoriosPage }) => ({ default: RelatoriosPage })))
+const HistoricoPage = lazy(() => import('./pages/HistoricoPage').then(({ HistoricoPage }) => ({ default: HistoricoPage })))
+const ConfiguracoesPage = lazy(() => import('./pages/ConfiguracoesPage').then(({ ConfiguracoesPage }) => ({ default: ConfiguracoesPage })))
 
 function useAtalhosGlobais(): void {
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
@@ -95,7 +97,7 @@ function Shell(): ReactNode {
 
   if (carregandoSessao) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
         <p className="text-sm text-slate-400">Carregando Pendencias…</p>
       </div>
     )
@@ -111,12 +113,14 @@ function Shell(): ReactNode {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar rota={location.pathname} />
         <main className="min-h-0 flex-1 overflow-hidden">
-          <Routes>
+          <Suspense fallback={<PageSkeleton />}>
+            <div key={location.pathname} className="h-full motion-safe:animate-page-enter">
+              <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/minhas-atividades" element={<MinhasAtividadesPage />} />
             <Route path="/pendencias" element={<PendenciasPage />} />
@@ -133,7 +137,9 @@ function Shell(): ReactNode {
             <Route path="/historico" element={<HistoricoPage />} />
             <Route path="/configuracoes" element={<ConfiguracoesPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              </Routes>
+            </div>
+          </Suspense>
         </main>
       </div>
       <CommandPalette />

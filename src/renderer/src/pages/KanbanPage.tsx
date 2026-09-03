@@ -59,7 +59,7 @@ export function KanbanPage(): ReactNode {
         {porStatus.map((col) => (
           <div
             key={col.status}
-            className="flex w-72 shrink-0 flex-col rounded-2xl bg-slate-100/70 dark:bg-slate-900"
+            className="flex w-72 shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-200/70 dark:border-transparent dark:bg-slate-900"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault()

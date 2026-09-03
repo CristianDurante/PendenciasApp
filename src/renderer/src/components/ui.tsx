@@ -31,6 +31,28 @@ export function Loading({ label = 'Carregando...' }: { label?: string }): ReactN
   )
 }
 
+export function Skeleton({ className = '' }: { className?: string }): ReactNode {
+  return <span aria-hidden="true" className={cn('block animate-shimmer rounded-lg bg-slate-200 dark:bg-slate-800', className)} />
+}
+
+export function PageSkeleton(): ReactNode {
+  return (
+    <div className="h-full overflow-hidden p-4 motion-safe:animate-page-enter">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-3 w-52" />
+        </div>
+        <Skeleton className="h-9 w-32" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-24" />)}
+      </div>
+      <Skeleton className="mt-4 h-64 w-full" />
+    </div>
+  )
+}
+
 export function EmptyState({
   titulo = 'Nada por aqui',
   descricao,

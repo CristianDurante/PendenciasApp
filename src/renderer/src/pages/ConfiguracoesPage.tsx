@@ -212,7 +212,9 @@ function PerfilSection(): ReactNode {
 
 function EmpresaSection(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
+  const sessao = useAppStore((s) => s.sessao)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
+  const [modalCriar, setModalCriar] = useState(false)
   const [form, setForm] = useState({ nome: '', cnpj: '', email: '', telefone: '' })
   const [salvando, setSalvando] = useState(false)
 
@@ -236,8 +238,59 @@ function EmpresaSection(): ReactNode {
     }
   }
 
+  async function criar(): Promise<void> {
+    if (!form.nome.trim()) return
+    setSalvando(true)
+    try {
+      const nova = await call<Empresa>('empresa', 'criar', form)
+      setEmpresa(nova)
+      setModalCriar(false)
+      pushToast('sucesso', 'Empresa criada')
+    } catch (e) {
+      pushToast('erro', 'Falha ao criar empresa', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   if (!empresa) {
-    return <EmptyState titulo="Nenhuma empresa configurada" descricao="Contate o administrador." />
+    return (
+      <div className="max-w-xl">
+        <div className="card space-y-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Empresa</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Nenhuma empresa foi configurada para sua conta.</p>
+          </div>
+          {sessao?.usuario.perfil === 'ADMIN' ? (
+            <Button onClick={() => setModalCriar(true)}>
+              <Plus className="h-4 w-4" /> Criar empresa
+            </Button>
+          ) : (
+            <EmptyState titulo="Nenhuma empresa configurada" descricao="Contate um administrador." />
+          )}
+        </div>
+        <Modal aberto={modalCriar} aoFechar={() => setModalCriar(false)} titulo="Criar empresa" rodape={<Button onClick={() => void criar()} carregando={salvando}>Criar empresa</Button>}>
+          <div className="space-y-3">
+            <div>
+              <label className="label">Nome da empresa *</label>
+              <Input autoFocus value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">CNPJ</label>
+              <Input value={form.cnpj} onChange={(e) => setForm((f) => ({ ...f, cnpj: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">E-mail</label>
+              <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} type="email" />
+            </div>
+            <div>
+              <label className="label">Telefone</label>
+              <Input value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))} />
+            </div>
+          </div>
+        </Modal>
+      </div>
+    )
   }
 
   return (
@@ -832,7 +885,7 @@ function CategoriasSection(): ReactNode {
       </div>
       <div className="flex flex-wrap gap-2">
         {categorias.map((c) => (
-          <div key={c.id} className="card flex items-center gap-2 !p-2.5">
+          <div key={c.id} className="card flex items-center gap-2 !p-3">
             <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: c.cor }} />
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{c.nome}</span>
             <span className="text-xs text-slate-400">({c.quantidade ?? 0})</span>
@@ -907,7 +960,7 @@ function TagsSection(): ReactNode {
       </div>
       <div className="flex flex-wrap gap-2">
         {tags.map((t) => (
-          <div key={t.id} className="card flex items-center gap-2 !p-2.5">
+          <div key={t.id} className="card flex items-center gap-2 !p-3">
             <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: t.cor }} />
             <span className="text-sm font-medium" style={{ color: t.cor }}>{t.nome}</span>
             <span className="text-xs text-slate-400">({t.quantidade ?? 0})</span>

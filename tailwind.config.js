@@ -25,12 +25,16 @@ module.exports = {
       animation: {
         'fade-in': 'fadeIn 0.2s ease-out',
         'slide-up': 'slideUp 0.25s ease-out',
-        'scale-in': 'scaleIn 0.15s ease-out'
+        'scale-in': 'scaleIn 0.15s ease-out',
+        shimmer: 'shimmer 1.4s ease-in-out infinite',
+        'page-enter': 'pageEnter 0.22s ease-out both'
       },
       keyframes: {
         fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
         slideUp: { from: { opacity: '0', transform: 'translateY(8px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
-        scaleIn: { from: { opacity: '0', transform: 'scale(0.96)' }, to: { opacity: '1', transform: 'scale(1)' } }
+        scaleIn: { from: { opacity: '0', transform: 'scale(0.96)' }, to: { opacity: '1', transform: 'scale(1)' } },
+        shimmer: { '0%, 100%': { opacity: '0.55' }, '50%': { opacity: '1' } },
+        pageEnter: { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'translateY(0)' } }
       }
     }
   },

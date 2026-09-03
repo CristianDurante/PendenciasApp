@@ -392,7 +392,7 @@ function VisaoGeral({
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {itens.map((i) => (
-          <div key={i.rotulo} className="flex items-start gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
+          <div key={i.rotulo} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/40">
             <span className="mt-0.5 text-slate-400">{i.icone}</span>
             <div>
               <p className="text-xs text-slate-400">{i.rotulo}</p>
