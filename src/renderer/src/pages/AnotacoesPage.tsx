@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bold, Check, FileText, Italic, List, ListOrdered, Loader2, Underline } from 'lucide-react'
+import { Bold, Check, FileText, Italic, Loader2, Underline } from 'lucide-react'
 import type { Nota } from '@shared/types'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
@@ -90,9 +90,6 @@ export function AnotacoesPage(): ReactNode {
           <button type="button" title="Negrito" aria-label="Negrito" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('bold')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Bold className="h-4 w-4" /></button>
           <button type="button" title="Itálico" aria-label="Itálico" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('italic')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Italic className="h-4 w-4" /></button>
           <button type="button" title="Sublinhado" aria-label="Sublinhado" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('underline')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Underline className="h-4 w-4" /></button>
-          <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
-          <button type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('insertUnorderedList')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><List className="h-4 w-4" /></button>
-          <button type="button" title="Lista numerada" aria-label="Lista numerada" onMouseDown={(e) => e.preventDefault()} onClick={() => executar('insertOrderedList')} className="rounded p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><ListOrdered className="h-4 w-4" /></button>
           <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
           <span className="text-xs text-slate-400">Cor</span>
           {['#334155', '#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea'].map((cor) => (
