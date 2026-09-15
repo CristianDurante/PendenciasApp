@@ -4,7 +4,7 @@
   "outputDirectory": "out/renderer",
   "functions": {
     "api/[...path].ts": {
-      "includeFiles": ["prisma/schema.prisma", "node_modules/.prisma/client/**", "node_modules/@prisma/client/**"]
+      "includeFiles": "prisma/schema.prisma"
     }
   },
   "rewrites": [
