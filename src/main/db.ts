@@ -1,21 +1,36 @@
 import { PrismaClient } from '@prisma/client'
-import { app } from 'electron'
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 
 let prisma: PrismaClient | null = null
+const require = createRequire(import.meta.url)
+
+function getElectronApp(): { getPath(name: string): string } | null {
+  if (!process.versions.electron) return null
+  try {
+    return require('electron').app as { getPath(name: string): string }
+  } catch {
+    return null
+  }
+}
 
 export function resolveDbPath(): string {
   if (process.env.PENDENCIAS_DB_PATH) return process.env.PENDENCIAS_DB_PATH
   try {
-    if (app && typeof app.getPath === 'function') {
-      return join(app.getPath('userData'), 'pendencias.db')
+    const electronApp = getElectronApp()
+    if (electronApp && typeof electronApp.getPath === 'function') {
+      return join(electronApp.getPath('userData'), 'pendencias.db')
     }
   } catch {
     // fallthrough
   }
   return join(process.cwd(), '.pendencias', 'pendencias.db')
+}
+
+function usaPostgres(): boolean {
+  return !!process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('file:')
 }
 
 export function resolveDataDir(): string {
@@ -35,6 +50,10 @@ function migrarBancoLegado(dbPath: string): void {
 
 export function getPrisma(): PrismaClient {
   if (prisma) return prisma
+  if (usaPostgres()) {
+    prisma = new PrismaClient()
+    return prisma
+  }
   const dbPath = resolveDbPath()
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true })
   prisma = new PrismaClient({
@@ -45,6 +64,13 @@ export function getPrisma(): PrismaClient {
 
 function temTabela(nome: string): Promise<boolean> {
   const db = getPrisma()
+  if (usaPostgres()) {
+    const result = db.$queryRawUnsafe<Array<{ table_name: string }>>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name=$1",
+      nome
+    )
+    return result.then((rows) => rows.length > 0).catch(() => false)
+  }
   const result = db.$queryRawUnsafe<Array<{ name: string }>>(
     "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
     nome
@@ -71,6 +97,26 @@ async function runMigration(): Promise<boolean> {
   if (!existsSync(schema)) return false
   const dbPath = resolveDbPath()
   const env = { ...process.env, DATABASE_URL: `file:${dbPath}` }
+  if (usaPostgres()) {
+    const postgresEnv = { ...process.env }
+    try {
+      if (bin.endsWith('.js')) {
+        execFileSync(process.execPath, [bin, 'db', 'push', '--skip-generate', '--schema', schema], {
+          env: postgresEnv,
+          stdio: 'pipe'
+        })
+      } else {
+        execFileSync(bin, ['db', 'push', '--skip-generate', '--schema', schema], {
+          env: postgresEnv,
+          stdio: 'pipe',
+          shell: bin.endsWith('.cmd')
+        })
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
   try {
     if (bin.endsWith('.js')) {
       execFileSync(process.execPath, [bin, 'migrate', 'deploy', '--schema', schema], { env, stdio: 'pipe' })
@@ -127,6 +173,10 @@ function clientTemModelosNecessarios(): boolean {
 }
 
 export async function ensureDatabase(): Promise<void> {
+  if (usaPostgres()) {
+    await getPrisma().$connect()
+    return
+  }
   const dbPath = resolveDbPath()
   migrarBancoLegado(dbPath)
   if (!existsSync(dirname(dbPath))) mkdirSync(dirname(dbPath), { recursive: true })

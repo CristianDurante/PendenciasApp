@@ -22,6 +22,7 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "server/**/*",
+    "api/**/*",
     "scripts/**/*",
     "prisma/**/*",
     "electron.vite.config.ts"

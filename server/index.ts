@@ -37,8 +37,7 @@ function cookies(req: express.Request): Record<string, string> {
   )
 }
 
-async function main(): Promise<void> {
-  const porta = Number(process.env.PENDENCIAS_SERVER_PORT || 3939)
+export async function criarAplicacao(): Promise<express.Express> {
   const dataDir = process.env.PENDENCIAS_DB_PATH
     ? dirname(process.env.PENDENCIAS_DB_PATH)
     : join(process.cwd(), '.pendencias')
@@ -119,6 +118,12 @@ async function main(): Promise<void> {
     })
   }
 
+  return app
+}
+
+export async function main(): Promise<void> {
+  const porta = Number(process.env.PENDENCIAS_SERVER_PORT || 3939)
+  const app = await criarAplicacao()
   const srv = app.listen(porta, () => {
     console.log(`[pendencias-server] API REST ouvindo em http://localhost:${porta}`)
     console.log(`[pendencias-server] Banco de dados em ${process.env.PENDENCIAS_DB_PATH}`)
@@ -133,7 +138,3 @@ async function main(): Promise<void> {
   process.on('SIGTERM', desligar)
 }
 
-main().catch((err) => {
-  console.error('[pendencias-server] erro fatal:', err)
-  process.exit(1)
-})
