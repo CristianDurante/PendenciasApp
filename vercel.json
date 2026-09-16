@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "prisma db push --skip-generate && npm run build:web",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "out/renderer",
   "functions": {
     "api/[...path].ts": {
