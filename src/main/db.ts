@@ -2,10 +2,8 @@ import { PrismaClient } from '@prisma/client'
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 
 let prisma: PrismaClient | null = null
-const require = createRequire(import.meta.url)
 
 function getElectronApp(): { getPath(name: string): string } | null {
   if (!process.versions.electron) return null
