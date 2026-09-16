@@ -52,7 +52,12 @@ export async function call<T = unknown>(
       },
       body: JSON.stringify({ args })
     })
-    resposta = (await r.json()) as ApiResponse<T>
+    const texto = await r.text()
+    try {
+      resposta = JSON.parse(texto) as ApiResponse<T>
+    } catch {
+      throw new ApiError(`A API retornou uma resposta inválida (HTTP ${r.status}).` , r.status)
+    }
     if (r.status === 401) {
       setToken(null)
     }
