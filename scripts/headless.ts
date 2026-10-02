@@ -1,10 +1,36 @@
-import { rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const dbDir = join(process.cwd(), '.pendencias-test')
-rmSync(dbDir, { recursive: true, force: true })
-process.env.PENDENCIAS_DB_PATH = join(dbDir, 'pendencias.db')
+const testDatabaseUrl = process.env.PENDENCIAS_TEST_DATABASE_URL
+if (!testDatabaseUrl) {
+  console.error('Defina PENDENCIAS_TEST_DATABASE_URL para apontar para um PostgreSQL descartável de testes.')
+  process.exit(2)
+}
+
+if (!/^postgres(?:ql)?:\/\//i.test(testDatabaseUrl)) {
+  console.error('PENDENCIAS_TEST_DATABASE_URL deve apontar para um PostgreSQL isolado para testes.')
+  process.exit(2)
+}
+
+function endpointDaUrl(value: string): string {
+  const url = new URL(value)
+  return `${url.hostname.toLowerCase()}:${url.port || '5432'}${decodeURIComponent(url.pathname)}:${decodeURIComponent(url.username)}`
+}
+
+const envPath = join(process.cwd(), '.env')
+const envDatabaseUrl = process.env.DATABASE_URL || (
+  existsSync(envPath)
+    ? readFileSync(envPath, 'utf8').match(/^\s*DATABASE_URL\s*=\s*["']?([^"'#\r\n]*)/m)?.[1]?.trim()
+    : undefined
+)
+if (envDatabaseUrl && endpointDaUrl(envDatabaseUrl) === endpointDaUrl(testDatabaseUrl)) {
+  console.error('Recusando executar testes no mesmo banco configurado para a aplicação.')
+  process.exit(2)
+}
+
+process.env.DATABASE_URL = testDatabaseUrl
 process.env.PENDENCIAS_DEV_RECOVERY = '1'
+process.env.PENDENCIAS_ADMIN_EMAIL = 'admin@pendencias.local'
 process.env.PENDENCIAS_ADMIN_SENHA = '12345678'
 process.env.PENDENCIAS_SKIP_LEGACY_MIGRATION = '1'
 
@@ -16,10 +42,23 @@ async function run(): Promise<void> {
   await ensureDatabase()
   await ensureBootstrap()
   const db = getPrisma()
+  const empresaInicial = await db.empresa.findFirst()
+  const adminInicial = await db.usuario.findUnique({ where: { email: 'admin@pendencias.local' } })
+  if (!empresaInicial || adminInicial?.empresaId !== empresaInicial.id) {
+    throw new Error('bootstrap deveria criar uma empresa e associá-la ao administrador')
+  }
 
   const print = (label: string, v: unknown): void => {
     console.log(`[${label}]`, JSON.stringify(v).slice(0, 300))
   }
+
+  const tentativaSqlInjection = await dispatch({
+    resource: 'auth',
+    action: 'login',
+    args: { email: "' OR '1'='1 --", senha: 'senha-invalida' }
+  })
+  if (tentativaSqlInjection.ok) throw new Error('payload de SQL injection não deveria autenticar')
+  print('seguranca.sql-injection-login', 'rejeitado')
 
   // Login
   const senhaTeste = '12345678'
