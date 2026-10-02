@@ -56,10 +56,12 @@ const ABAS: Array<{ id: Aba; rotulo: string; icone: ReactNode }> = [
 export function ConfiguracoesPage(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
   const [aba, setAba] = useState<Aba>('perfil')
+  const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
   const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
   const ehGestor = sessao?.usuario.perfil === 'GESTOR'
 
   const abasVisiveis = ABAS.filter((a) => {
+    if (ehConsultor) return ['perfil', 'modulos', 'aparencia'].includes(a.id)
     if (a.id === 'equipes') return ehAdmin
     if (a.id === 'usuarios' || a.id === 'categorias' || a.id === 'tags' || a.id === 'notificacoes' || a.id === 'backup') {
       return ehAdmin || ehGestor

@@ -27,6 +27,7 @@ export function PendenciasPage(): ReactNode {
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const sessao = useAppStore((s) => s.sessao)
   const ehAdmin = sessao?.usuario.perfil === 'ADMIN'
+  const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
 
   useEffect(() => {
     void carregarCatalogo()
@@ -196,7 +197,7 @@ export function PendenciasPage(): ReactNode {
             className="w-48"
           />
         )}
-        {selecionadas.length > 0 && (
+        {!ehConsultor && selecionadas.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
               {selecionadas.length} selecionada(s)
@@ -325,14 +326,14 @@ export function PendenciasPage(): ReactNode {
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-400 dark:bg-slate-800">
               <tr>
-                <th className="w-10 px-3 py-2.5">
+                {!ehConsultor && <th className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={itens.length > 0 && itens.every((i) => selecionadas.includes(i.id))}
                     onChange={(e) => setSelecionadas(e.target.checked ? itens.map((i) => i.id) : [])}
                     className="h-4 w-4 rounded accent-brand-600"
                   />
-                </th>
+                </th>}
                 <th className="px-3 py-2.5">Pendência</th>
                 <th className="px-3 py-2.5">Status</th>
                 <th className="px-3 py-2.5">Prioridade</th>
@@ -350,6 +351,7 @@ export function PendenciasPage(): ReactNode {
                   selecionada={selecionadas.includes(p.id)}
                   toggleSelecao={toggleSelecao}
                   aoAbrir={abrirPendencia}
+                  ehConsultor={ehConsultor}
                 />
               ))}
             </tbody>
@@ -393,20 +395,20 @@ export function PendenciasPage(): ReactNode {
   )
 }
 
-function PendenciaRow({ p, selecionada, toggleSelecao, aoAbrir }: { p: Pendencia; selecionada: boolean; toggleSelecao: (id: string) => void; aoAbrir: (p: Pendencia) => void }): ReactNode {
+function PendenciaRow({ p, selecionada, toggleSelecao, aoAbrir, ehConsultor }: { p: Pendencia; selecionada: boolean; toggleSelecao: (id: string) => void; aoAbrir: (p: Pendencia) => void; ehConsultor: boolean }): ReactNode {
   return (
     <tr
       className={cn('cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50', selecionada && 'bg-brand-50/60 dark:bg-brand-900/10')}
       onClick={() => aoAbrir(p)}
     >
-      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+      {!ehConsultor && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={selecionada}
           onChange={() => toggleSelecao(p.id)}
           className="h-4 w-4 rounded accent-brand-600"
         />
-      </td>
+      </td>}
       <td className="max-w-xs px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           {p.atrasada && (

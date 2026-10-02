@@ -18,6 +18,8 @@ export function KanbanPage(): ReactNode {
   const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const dataVersao = useAppStore((s) => s.dataVersao)
+  const sessao = useAppStore((s) => s.sessao)
+  const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
 
   useEffect(() => {
     void carregarCatalogo()
@@ -72,13 +74,13 @@ export function KanbanPage(): ReactNode {
               <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 {col.itens.length}
               </span>
-              <button
+              {!ehConsultor && <button
                 onClick={() => abrirNovaPendencia({ status: col.status })}
                 className="rounded p-1 text-slate-400 transition hover:bg-white hover:text-brand-600 dark:hover:bg-slate-800"
                 title={`Nova pendência em ${col.status}`}
               >
                 <Plus className="h-4 w-4" />
-              </button>
+              </button>}
             </div>
             <div
               className="min-h-[120px] flex-1 space-y-2 overflow-y-auto px-2 pb-3"
@@ -97,6 +99,7 @@ export function KanbanPage(): ReactNode {
                     key={p.id}
                     pendencia={p}
                     aoClicar={abrirPendencia}
+                    arrastavel={!ehConsultor || p.responsavelId === sessao?.usuario.id}
                     onDragStart={(pend) => setArrastando(pend)}
                     onDrop={(pend) => void mover(pend, col.status)}
                   />

@@ -166,12 +166,88 @@ async function run(): Promise<void> {
     resource: 'auth',
     action: 'login',
     args: { email: 'ze@empresa.com', senha: senhaTeste }
-  })) as { ok: boolean; data: { sessao: { token: string } } }
+  })) as { ok: boolean; data: { sessao: { token: string; usuario: { id: string; equipeId: string | null } } } }
   if (!loginZe.ok) throw new Error('login Zé falhou')
   const tokenZe = loginZe.data.sessao.token
+  const ze = loginZe.data.sessao.usuario
   const negado = await dispatch({ resource: 'usuario', action: 'criar', args: {}, token: tokenZe })
   if (negado.ok) throw new Error('USUARIO não deveria criar usuários')
   print('permissoes.usuario', negado.error)
+
+  const prazoConsultor = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+  const pendenciaConsultor = (await api('pendencia', 'criar', {
+    titulo: 'Pendência atribuída ao consultor - prazo além de sete dias',
+    responsavelId: ze.id,
+    equipeId: ze.equipeId,
+    prazo: prazoConsultor
+  })) as { id: string }
+  const dashboardZe = (await dispatch({ resource: 'dashboard', action: 'obter', token: tokenZe })) as {
+    ok: boolean
+    data?: { minhasPendencias: Array<{ id: string }>; proximas: Array<{ id: string }> }
+    error?: string
+  }
+  if (!dashboardZe.ok || !dashboardZe.data?.minhasPendencias.some((p) => p.id === pendenciaConsultor.id)) {
+    throw new Error(`dashboard não listou a pendência atribuída fora da janela de sete dias: ${dashboardZe.error || ''}`)
+  }
+  if (dashboardZe.data.proximas.some((p) => p.id === pendenciaConsultor.id)) {
+    throw new Error('pendência com prazo em 14 dias não deveria estar na lista de próximas')
+  }
+  const statusPermitido = await dispatch({
+    resource: 'pendencia',
+    action: 'status',
+    args: { id: pendenciaConsultor.id, status: 'EM_ANDAMENTO' },
+    token: tokenZe
+  })
+  if (!statusPermitido.ok) throw new Error(`consultor não conseguiu alterar o status da própria pendência: ${statusPermitido.error}`)
+
+  for (const action of ['criar', 'atualizar', 'excluir', 'duplicar', 'concluir', 'reabrir', 'prazo', 'responsavel', 'prioridade', 'tagAdicionar', 'checklistAdicionar', 'comentarioAdicionar']) {
+    const negada = await dispatch({
+      resource: 'pendencia',
+      action,
+      args: { id: pendenciaConsultor.id, pendenciaId: pendenciaConsultor.id, titulo: 'Tentativa não autorizada' },
+      token: tokenZe
+    })
+    if (negada.ok) throw new Error(`USUARIO não deveria executar pendencia.${action}`)
+  }
+  const statusDeTerceiro = await dispatch({
+    resource: 'pendencia',
+    action: 'status',
+    args: { id: p1.id, status: 'EM_ANDAMENTO' },
+    token: tokenZe
+  })
+  if (statusDeTerceiro.ok) throw new Error('consultor não deveria alterar status de pendência não atribuída a ele')
+  const anexoNegado = await dispatch({ resource: 'anexo', action: 'criar', args: {}, token: tokenZe })
+  if (anexoNegado.ok) throw new Error('USUARIO não deveria criar anexos em pendências')
+  await api('empresa', 'salvarConfig', { patch: { tema: 'dark' } })
+  const abasConsultor = await dispatch({
+    resource: 'empresa',
+    action: 'salvarConfig',
+    args: { config: JSON.stringify({ tema: 'light' }), patch: { modulosSidebar: { kanban: false } } },
+    token: tokenZe
+  })
+  if (!abasConsultor.ok) throw new Error(`consultor deveria poder salvar abas laterais: ${abasConsultor.error}`)
+  const configConsultor = (await dispatch({ resource: 'empresa', action: 'config', token: tokenZe })) as {
+    ok: boolean
+    data?: { tema?: string; modulosSidebar?: { kanban?: boolean } }
+  }
+  if (!configConsultor.ok || configConsultor.data?.tema !== 'dark' || configConsultor.data.modulosSidebar?.kanban !== false) {
+    throw new Error('consultor alterou configuração além das abas laterais')
+  }
+  const configNegada = await dispatch({
+    resource: 'empresa',
+    action: 'salvarConfig',
+    args: { patch: { tema: 'light' } },
+    token: tokenZe
+  })
+  if (configNegada.ok) throw new Error('consultor não deveria alterar aparência global da empresa')
+  print('permissoes.consultor.pendencias', {
+    pendenciaFuturaVisivel: true,
+    atualizaStatusProprio: true,
+    outrasMutacoesBloqueadas: true,
+    statusDeTerceiroBloqueado: true,
+    anexoNegado: true,
+    apenasAbasConfiguraveis: true
+  })
 
   // Session invalida
   const invalida = await dispatch({ resource: 'dashboard', action: 'obter', token: 'token-invalido' })

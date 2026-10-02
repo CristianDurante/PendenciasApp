@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { RefreshCw, ClipboardList, CheckCircle2, RotateCcw, ListTodo, MessageSquareReply, CalendarClock } from 'lucide-react'
 import type { DadosDashboard, Pendencia, Retorno, Compromisso } from '@shared/types'
+import { PENDENCIA_STATUS, PENDENCIA_STATUS_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
 import { formatarData, diasAte } from '../lib/format'
-import { Button, PriorityBadge, StatusBadge, RetornoStatusBadge, CompromissoStatusBadge, Avatar, Loading, EmptyState } from '../components/ui'
+import { Button, PriorityBadge, StatusBadge, RetornoStatusBadge, CompromissoStatusBadge, Avatar, Loading, EmptyState, Select } from '../components/ui'
 
 export function MinhasAtividadesPage(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
@@ -33,13 +34,16 @@ export function MinhasAtividadesPage(): ReactNode {
   }, [dataVersao, carregar])
 
   const meuId = sessao?.usuario.id
+  const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
 
   function minhaPendencia(p: Pendencia): boolean {
     return !p.responsavelId || p.responsavelId === meuId
   }
 
   const minhasPendencias: Pendencia[] = dados
-    ? [...dados.atrasadas, ...dados.pendenciasHoje, ...dados.proximas].filter(minhaPendencia)
+    ? ehConsultor
+      ? dados.minhasPendencias || []
+      : [...dados.atrasadas, ...dados.pendenciasHoje, ...dados.proximas].filter(minhaPendencia)
     : []
   const unicos = minhasPendencias.filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
   const meusRetornos: Retorno[] = dados
@@ -70,6 +74,20 @@ export function MinhasAtividadesPage(): ReactNode {
       notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao reabrir', e instanceof Error ? e.message : undefined)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function alterarStatus(p: Pendencia, status: string): Promise<void> {
+    setBusy(p.id)
+    try {
+      await call('pendencia', 'status', { id: p.id, status })
+      pushToast('sucesso', 'Status atualizado')
+      await carregar()
+      notificarMudanca()
+    } catch (e) {
+      pushToast('erro', 'Falha ao atualizar status', e instanceof Error ? e.message : undefined)
     } finally {
       setBusy('')
     }
@@ -110,7 +128,20 @@ export function MinhasAtividadesPage(): ReactNode {
                     <button onClick={() => abrirPendencia(p)} className="min-w-0 flex-1 truncate text-left text-sm font-medium text-slate-800 hover:text-brand-600 dark:text-slate-100 dark:hover:text-brand-300">
                       {p.titulo}
                     </button>
-                    <StatusBadge status={p.status} />
+                    {ehConsultor ? (
+                      <Select
+                        className="!w-auto !py-1 text-xs"
+                        value={p.status}
+                        disabled={!!busy}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => void alterarStatus(p, e.target.value)}
+                        aria-label={`Alterar status de ${p.titulo}`}
+                      >
+                        {PENDENCIA_STATUS.map((status) => (
+                          <option key={status} value={status}>{PENDENCIA_STATUS_LABEL[status]}</option>
+                        ))}
+                      </Select>
+                    ) : <StatusBadge status={p.status} />}
                   </div>
                   <div className="mt-1.5 flex items-center justify-between">
                     <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -118,7 +149,7 @@ export function MinhasAtividadesPage(): ReactNode {
                       {p.prazo && <span className={p.atrasada ? 'font-semibold text-red-500' : ''}>{formatarData(p.prazo)} ({diasAte(p.prazo)})</span>}
                       {p.atrasada && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:bg-red-900/30 dark:text-red-300">ATRASADA</span>}
                     </div>
-                    <div className="flex gap-1">
+                    {!ehConsultor && <div className="flex gap-1">
                       {p.status === 'CONCLUIDA' ? (
                         <Button variant="ghost" size="sm" onClick={() => void reabrir(p)} disabled={!!busy}>
                           <RotateCcw className="h-3.5 w-3.5" /> Reabrir
@@ -128,7 +159,7 @@ export function MinhasAtividadesPage(): ReactNode {
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Concluir
                         </Button>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 </div>
               ))}

@@ -13,6 +13,20 @@ const EmpresaSchema = z.object({
   config: z.any().optional().nullable()
 })
 
+const MODULOS_SIDEBAR_PADRAO: NonNullable<ConfigApp['modulosSidebar']> = {
+  minhasAtividades: true,
+  pendencias: true,
+  kanban: true,
+  calendario: true,
+  compromissos: true,
+  retornos: true,
+  anotacoes: true,
+  clientes: true,
+  projetos: true,
+  relatorios: true,
+  historico: true
+}
+
 export async function obterEmpresa(ctx: ApiContext): Promise<unknown> {
   const db = getPrisma()
   const id = ctx.empresaId
@@ -90,10 +104,42 @@ export async function obterConfigApp(ctx: ApiContext): Promise<ConfigApp> {
 }
 
 export async function salvarConfigApp(ctx: ApiContext, args: Record<string, unknown>): Promise<ConfigApp> {
-  requireRoles(ctx, ['ADMIN'])
+  requireRoles(ctx, ['ADMIN', 'USUARIO'])
   const db = getPrisma()
   const id = ctx.empresaId
   if (!id) throw new AppError('Nenhuma empresa configurada')
+  if (ctx.perfil === 'USUARIO') {
+    const patch = args.patch
+    if (!patch || typeof patch !== 'object' || Object.keys(patch).some((chave) => chave !== 'modulosSidebar')) {
+      throw new AppError('Consultores só podem alterar as abas laterais.')
+    }
+    const modulosSidebar = (patch as Record<string, unknown>).modulosSidebar
+    if (!modulosSidebar || typeof modulosSidebar !== 'object' || Array.isArray(modulosSidebar)) {
+      throw new AppError('Configuração das abas inválida.')
+    }
+    const permitidos = [
+      'minhasAtividades', 'pendencias', 'kanban', 'calendario', 'compromissos', 'retornos',
+      'anotacoes', 'clientes', 'projetos', 'relatorios', 'historico'
+    ]
+    if (
+      Object.keys(modulosSidebar).some((chave) => !permitidos.includes(chave)) ||
+      Object.values(modulosSidebar).some((valor) => typeof valor !== 'boolean')
+    ) {
+      throw new AppError('Configuração das abas inválida.')
+    }
+    const empresa = await db.empresa.findUnique({ where: { id }, select: { config: true } })
+    const config = safeJsonParse<ConfigApp>(empresa?.config, {})
+    const novo: ConfigApp = {
+      ...config,
+      modulosSidebar: {
+        ...MODULOS_SIDEBAR_PADRAO,
+        ...config.modulosSidebar,
+        ...(modulosSidebar as Partial<NonNullable<ConfigApp['modulosSidebar']>>)
+      }
+    }
+    await db.empresa.update({ where: { id }, data: { config: JSON.stringify(novo) } })
+    return novo
+  }
   const config = safeJsonParse<ConfigApp>(args.config ? String(args.config) : null, {})
   const parcial = (args.patch || {}) as Partial<ConfigApp>
   const novo = { ...config, ...parcial }

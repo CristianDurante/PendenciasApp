@@ -13,6 +13,7 @@ export function ClienteDetailPage(): ReactNode {
   const navigate = useNavigate()
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
+  const ehConsultor = useAppStore((s) => s.sessao?.usuario.perfil === 'USUARIO')
 
   const [dados, setDados] = useState<DadosClienteDetail | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -52,9 +53,9 @@ export function ClienteDetailPage(): ReactNode {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => abrirNovaPendencia({ clienteId: c.id })}>
+            {!ehConsultor && <Button variant="secondary" onClick={() => abrirNovaPendencia({ clienteId: c.id })}>
               <Plus className="h-4 w-4" /> Nova pendência
-            </Button>
+            </Button>}
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">

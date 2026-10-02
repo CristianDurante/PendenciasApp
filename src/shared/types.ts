@@ -374,6 +374,7 @@ export interface DadosDashboard {
   pendenciasHoje: Pendencia[]
   atrasadas: Pendencia[]
   proximas: Pendencia[]
+  minhasPendencias: Pendencia[]
   retornosPendentes: Retorno[]
   retornosAtrasados: Retorno[]
   compromissosHoje: Compromisso[]

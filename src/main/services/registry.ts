@@ -241,6 +241,13 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
     if (!recurso) return { ok: false, error: `Recurso desconhecido: ${req.resource}` }
     const handler = recurso[req.action]
     if (!handler) return { ok: false, error: `Ação desconhecida: ${req.resource}.${req.action}` }
+    if (
+      ctx.perfil === 'USUARIO' &&
+      ((req.resource === 'pendencia' && !['listar', 'obter', 'status'].includes(req.action)) ||
+        (req.resource === 'anexo' && ['criar', 'excluir'].includes(req.action)))
+    ) {
+      throw new AppError('Consultores podem apenas visualizar pendências e atualizar o status das que estão atribuídas a eles.', 403)
+    }
     const data = await handler(ctx, (req.args || {}) as Record<string, unknown>)
     return { ok: true, data }
   } catch (err) {

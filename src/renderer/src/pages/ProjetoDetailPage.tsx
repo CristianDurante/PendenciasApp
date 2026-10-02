@@ -19,6 +19,7 @@ export function ProjetoDetailPage(): ReactNode {
   const navigate = useNavigate()
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
+  const ehConsultor = useAppStore((s) => s.sessao?.usuario.perfil === 'USUARIO')
 
   const [dados, setDados] = useState<ProjetoDetail | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -69,9 +70,9 @@ export function ProjetoDetailPage(): ReactNode {
               </div>
             )}
             <ProjetoStatusBadge status={dados.status} />
-            <Button onClick={() => abrirNovaPendencia({ projetoId: dados.id })}>
+            {!ehConsultor && <Button onClick={() => abrirNovaPendencia({ projetoId: dados.id })}>
               <Plus className="h-4 w-4" /> Nova pendência
-            </Button>
+            </Button>}
           </div>
         </div>
         {dados.descricao && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{dados.descricao}</p>}

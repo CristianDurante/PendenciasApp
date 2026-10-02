@@ -538,9 +538,12 @@ export async function alterarStatusPendencia(ctx: ApiContext, args: Record<strin
   const id = String(args.id || '')
   const status = String(args.status || '')
   if (!PENDENCIA_STATUS.includes(status as PendenciaStatus)) throw new AppError('Status inválido')
+  const p = await carregarComAcesso(ctx, id)
+  if (ctx.perfil === 'USUARIO' && p.responsavelId !== ctx.usuarioId) {
+    throw new AppError('Consultores só podem atualizar o status das pendências atribuídas a eles.', 403)
+  }
   if (status === 'CONCLUIDA') return concluirPendencia(ctx, { id })
   const db = getPrisma()
-  const p = await carregarComAcesso(ctx, id)
   // Idempotente: já está no status desejado, não gera novo histórico nem gravação.
   if (p.status === status) {
     const completaAtual = await db.pendencia.findUnique({ where: { id }, include: pendenciaInclude })

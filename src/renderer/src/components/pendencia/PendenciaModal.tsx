@@ -7,6 +7,7 @@ import { call } from '../../lib/api'
 import type { Pendencia } from '@shared/types'
 
 export function PendenciaModal(): ReactNode {
+  const perfil = useAppStore((s) => s.sessao?.usuario.perfil)
   const { aberto, presets } = useAppStore((s) => s.modalNovaPendencia)
   const fechar = useAppStore((s) => s.fecharNovaPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
@@ -118,6 +119,8 @@ export function PendenciaModal(): ReactNode {
       setSalvando(false)
     }
   }
+
+  if (perfil === 'USUARIO') return null
 
   return (
     <Modal

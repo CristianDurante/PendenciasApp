@@ -35,6 +35,8 @@ import { formatarData, formatarDataHora, formatarTamanho, cn, relativo } from '.
 type Aba = 'geral' | 'checklist' | 'comentarios' | 'anexos' | 'historico'
 
 export function PendenciaDetail(): ReactNode {
+  const usuario = useAppStore((s) => s.sessao?.usuario)
+  const ehConsultor = usuario?.perfil === 'USUARIO'
   const pendencia = useAppStore((s) => s.pendenciaDestaque)
   const fechar = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
@@ -222,7 +224,7 @@ export function PendenciaDetail(): ReactNode {
                 <Select
                   className="!w-auto !py-1.5 text-xs"
                   value={dados.status}
-                  disabled={operacao}
+                  disabled={operacao || (ehConsultor && dados.responsavelId !== usuario?.id)}
                   onChange={(e) => mudarStatus(e.target.value)}
                 >
                   {PENDENCIA_STATUS.map((s) => (
@@ -231,24 +233,26 @@ export function PendenciaDetail(): ReactNode {
                     </option>
                   ))}
                 </Select>
-                <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => abrirNovaPendencia({ pendencia: dados })} title="Editar">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                {dados.status === 'CONCLUIDA' ? (
-                  <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'reabrir', { id: dados.id }), 'Pendência reaberta')} title="Reabrir">
-                    <RotateCcw className="h-4 w-4" />
+                {!ehConsultor && <>
+                  <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => abrirNovaPendencia({ pendencia: dados })} title="Editar">
+                    <Pencil className="h-4 w-4" />
                   </Button>
-                ) : (
-                  <Button variant="success" className="!px-2.5 !py-1.5" disabled={operacao} onClick={concluir} title="Concluir">
-                    <CheckCircle2 className="h-4 w-4" />
+                  {dados.status === 'CONCLUIDA' ? (
+                    <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'reabrir', { id: dados.id }), 'Pendência reaberta')} title="Reabrir">
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button variant="success" className="!px-2.5 !py-1.5" disabled={operacao} onClick={concluir} title="Concluir">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'duplicar', { id: dados.id }), 'Pendência duplicada')} title="Duplicar">
+                    <Copy className="h-4 w-4" />
                   </Button>
-                )}
-                <Button variant="secondary" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => void executarAcao(() => call('pendencia', 'duplicar', { id: dados.id }), 'Pendência duplicada')} title="Duplicar">
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button variant="danger" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => setConfirmarExclusao(true)} title="Excluir">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                  <Button variant="danger" className="!px-2.5 !py-1.5" disabled={operacao} onClick={() => setConfirmarExclusao(true)} title="Excluir">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>}
               </div>
             </div>
             {dados.tags && dados.tags.length > 0 && (
@@ -289,6 +293,7 @@ export function PendenciaDetail(): ReactNode {
               <VisaoGeral
                 dados={dados}
                 operacao={operacao}
+                somenteLeitura={ehConsultor}
                 aoSalvarTags={(tags) =>
                   void executarAcao(
                     () => call('pendencia', 'atualizar', { id: dados.id, tags }),
@@ -306,6 +311,7 @@ export function PendenciaDetail(): ReactNode {
                 aoRemover={removerChecklist}
                 novoChecklist={novoChecklist}
                 setNovoChecklist={setNovoChecklist}
+                somenteLeitura={ehConsultor}
               />
             )}
             {aba === 'comentarios' && (
@@ -316,6 +322,7 @@ export function PendenciaDetail(): ReactNode {
                 novoComentario={novoComentario}
                 setNovoComentario={setNovoComentario}
                 aoEnviar={enviarComentario}
+                somenteLeitura={ehConsultor}
               />
             )}
             {aba === 'anexos' && (
@@ -324,6 +331,7 @@ export function PendenciaDetail(): ReactNode {
                 anexos={dados.anexos || []}
                 operacao={operacao}
                 aoAtualizar={atualizarAposAcao}
+                somenteLeitura={ehConsultor}
               />
             )}
             {aba === 'historico' && <HistoricoSection itens={historico} />}
@@ -358,11 +366,13 @@ export function PendenciaDetail(): ReactNode {
 function VisaoGeral({
   dados,
   operacao,
-  aoSalvarTags
+  aoSalvarTags,
+  somenteLeitura
 }: {
   dados: Pendencia
   operacao: boolean
   aoSalvarTags: (tags: string[]) => void
+  somenteLeitura: boolean
 }): ReactNode {
   const [tags, setTags] = useState<string[]>((dados.tags || []).map((t) => t.tagId))
   useEffect(() => {
@@ -411,7 +421,12 @@ function VisaoGeral({
 
       <div>
         <h4 className="label">Tags</h4>
-        <TagPicker selecionadas={tags} aoMudar={(novas) => aoSalvarTags(novas)} desabilitado={operacao} />
+        {somenteLeitura ? (
+          <div className="flex flex-wrap gap-1.5">
+            {(dados.tags || []).map((t) => t.tag && <TagBadge key={t.tagId} tag={t.tag} />)}
+            {(dados.tags || []).length === 0 && <span className="text-sm text-slate-400">Sem tags</span>}
+          </div>
+        ) : <TagPicker selecionadas={tags} aoMudar={(novas) => aoSalvarTags(novas)} desabilitado={operacao} />}
       </div>
 
       {dados.recorrencia && (
@@ -440,7 +455,8 @@ function ChecklistSection({
   aoToggle,
   aoRemover,
   novoChecklist,
-  setNovoChecklist
+  setNovoChecklist,
+  somenteLeitura
 }: {
   itens: ChecklistItem[]
   operacao: boolean
@@ -449,6 +465,7 @@ function ChecklistSection({
   aoRemover: (itemId: string) => void
   novoChecklist: string
   setNovoChecklist: (v: string) => void
+  somenteLeitura: boolean
 }): ReactNode {
   const concluidos = itens.filter((i) => i.concluido).length
   const progresso = itens.length ? Math.round((concluidos / itens.length) * 100) : 0
@@ -464,7 +481,7 @@ function ChecklistSection({
         <ProgressBar valor={progresso} />
       </div>
 
-      {itens.length === 0 && <EmptyState titulo="Sem itens no checklist" descricao="Adicione subtarefas para acompanhar o progresso." />}
+      {itens.length === 0 && <EmptyState titulo="Sem itens no checklist" descricao={somenteLeitura ? undefined : 'Adicione subtarefas para acompanhar o progresso.'} />}
 
       <div className="space-y-2">
         {itens.map((item) => (
@@ -472,7 +489,11 @@ function ChecklistSection({
             key={item.id}
             className="group flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
           >
-            <button
+            {somenteLeitura ? (
+              <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded border', item.concluido ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600')}>
+                {item.concluido && <CheckCircle2 className="h-4 w-4" />}
+              </span>
+            ) : <button
               onClick={() => aoToggle(item.id)}
               disabled={operacao}
               className={cn(
@@ -482,18 +503,18 @@ function ChecklistSection({
               )}
             >
               {item.concluido && <CheckCircle2 className="h-4 w-4" />}
-            </button>
+            </button>}
             <span className={cn('flex-1 text-sm', item.concluido ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100')}>
               {item.descricao}
             </span>
-            <button className="text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-red-500 disabled:opacity-40" disabled={operacao} onClick={() => aoRemover(item.id)}>
+            {!somenteLeitura && <button className="text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-red-500 disabled:opacity-40" disabled={operacao} onClick={() => aoRemover(item.id)}>
               <Trash2 className="h-4 w-4" />
-            </button>
+            </button>}
           </div>
         ))}
       </div>
 
-      <div className="flex gap-2">
+      {!somenteLeitura && <div className="flex gap-2">
         <input
           className="input"
           placeholder="Adicionar subtarefa..."
@@ -519,7 +540,7 @@ function ChecklistSection({
         >
           <Plus className="h-4 w-4" /> Adicionar
         </Button>
-      </div>
+      </div>}
     </div>
   )
 }
@@ -530,7 +551,8 @@ function ComentariosSection({
   operacao,
   novoComentario,
   setNovoComentario,
-  aoEnviar
+  aoEnviar,
+  somenteLeitura
 }: {
   comentarios: Comentario[]
   usuarios: Array<{ id: string; nome: string }>
@@ -538,6 +560,7 @@ function ComentariosSection({
   novoComentario: string
   setNovoComentario: (v: string) => void
   aoEnviar: () => void
+  somenteLeitura: boolean
 }): ReactNode {
   const eu = useAppStore((s) => s.sessao?.usuario)
   const pushToast = useAppStore((s) => s.pushToast)
@@ -545,7 +568,7 @@ function ComentariosSection({
   void pushToast
   return (
     <div className="space-y-4">
-      <div className="flex gap-3">
+      {!somenteLeitura && <div className="flex gap-3">
         <Avatar nome={eu?.nome} tamanho={32} />
         <div className="flex-1">
           <textarea
@@ -565,7 +588,7 @@ function ComentariosSection({
             </Button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {comentarios.length === 0 && <EmptyState titulo="Sem comentários" descricao="Seja o primeiro a comentar." />}
 
@@ -587,7 +610,7 @@ function ComentariosSection({
   )
 }
 
-function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar }: { pendenciaId: string; anexos: Anexo[]; operacao: boolean; aoAtualizar: () => Promise<void> }): ReactNode {
+function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar, somenteLeitura }: { pendenciaId: string; anexos: Anexo[]; operacao: boolean; aoAtualizar: () => Promise<void>; somenteLeitura: boolean }): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
   const [enviando, setEnviando] = useState(false)
   const enviandoRef = useRef(false)
@@ -655,7 +678,7 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar }: { pendenc
 
   return (
     <div className="space-y-4">
-      <label className={cn(
+      {!somenteLeitura && <label className={cn(
         'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-8 text-slate-500 transition hover:border-brand-400 hover:text-brand-500 dark:border-slate-700',
         ocupado && 'pointer-events-none opacity-60'
       )}>
@@ -673,7 +696,7 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar }: { pendenc
             e.target.value = ''
           }}
         />
-      </label>
+      </label>}
 
       {anexos.length === 0 && <EmptyState titulo="Sem anexos" />}
 
@@ -692,9 +715,9 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar }: { pendenc
             <button className="text-slate-400 hover:text-brand-500" onClick={() => void baixar(a.id)} title="Baixar">
               <Download className="h-4 w-4" />
             </button>
-            <button className="text-slate-400 hover:text-red-500 disabled:opacity-40" disabled={ocupado} onClick={() => void excluir(a.id)} title="Excluir">
+            {!somenteLeitura && <button className="text-slate-400 hover:text-red-500 disabled:opacity-40" disabled={ocupado} onClick={() => void excluir(a.id)} title="Excluir">
               <Trash2 className="h-4 w-4" />
-            </button>
+            </button>}
           </div>
         ))}
       </div>

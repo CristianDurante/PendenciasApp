@@ -31,6 +31,7 @@ const rotulos: Record<Grupo, string> = {
 }
 
 export function CommandPalette(): ReactNode {
+  const sessao = useAppStore((s) => s.sessao)
   const aberto = useAppStore((s) => s.painelBusca)
   const setAberto = useAppStore((s) => s.setPainelBusca)
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
@@ -130,13 +131,13 @@ export function CommandPalette(): ReactNode {
             <div className="px-3 py-4">
               <p className="text-xs text-slate-400">Atalhos</p>
               <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-                <li><b>Ctrl+N</b> — nova pendência</li>
+                {sessao?.usuario.perfil !== 'USUARIO' && <li><b>Ctrl+N</b> — nova pendência</li>}
                 <li><b>Ctrl+K</b> — busca global</li>
                 <li><b>Ctrl+F</b> — filtrar listagem atual</li>
                 <li><b>Ctrl+Enter</b> — salvar formulário aberto</li>
                 <li><b>Esc</b> — fechar janela / modal</li>
               </ul>
-              <button
+              {sessao?.usuario.perfil !== 'USUARIO' && <button
                 onClick={() => {
                   setAberto(false)
                   abrirNovaPendencia()
@@ -144,7 +145,7 @@ export function CommandPalette(): ReactNode {
                 className="mt-3 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-brand-600 transition hover:border-brand-400 hover:bg-brand-50 dark:border-slate-600 dark:text-brand-300 dark:hover:bg-brand-900/20"
               >
                 + Criar nova pendência
-              </button>
+              </button>}
             </div>
           )}
           {resultado &&

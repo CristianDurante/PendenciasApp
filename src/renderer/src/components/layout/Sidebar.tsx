@@ -73,14 +73,16 @@ export function Sidebar(): ReactNode {
         </div>
       </div>
 
-      <div className="px-3 pb-3">
-        <button
-          onClick={() => abrirNovaPendencia()}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-        >
-          <Plus className="h-4 w-4" /> Nova Pendência
-        </button>
-      </div>
+      {sessao?.usuario.perfil !== 'USUARIO' && (
+        <div className="px-3 pb-3">
+          <button
+            onClick={() => abrirNovaPendencia()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          >
+            <Plus className="h-4 w-4" /> Nova Pendência
+          </button>
+        </div>
+      )}
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
         {itens.filter((item) => item.to === '/' || modulos?.[moduloPorRota[item.to]] !== false).map((item) => (

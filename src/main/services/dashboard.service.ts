@@ -1,6 +1,7 @@
 import { getPrisma } from '../db'
 import { requireEmpresa, temAcessoGlobal } from '../auth'
 import type { ApiContext, DadosDashboard } from '@shared/types'
+import { EQUIPE_SEM_EQUIPE_ID } from '../../shared/constants'
 import { deepIso, isAtrasada, dataInicioDoDia, dataFimDoDia, addDias } from '../helpers'
 import { pendenciaInclude } from './pendencia.service'
 import { historicoGlobal } from './historico.service'
@@ -17,7 +18,13 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
   const proxFim = dataFimDoDia(addDias(new Date(), 7))
 
   const ondeEquipe =
-    !temAcessoGlobal(ctx) && ctx.equipeId ? { equipeId: ctx.equipeId } : temAcessoGlobal(ctx) && args.equipeId ? { equipeId: String(args.equipeId) } : {}
+    !temAcessoGlobal(ctx)
+      ? ctx.equipeId
+        ? { equipeId: ctx.equipeId }
+        : { OR: [{ equipeId: null }, { equipeId: EQUIPE_SEM_EQUIPE_ID }] }
+      : args.equipeId
+        ? { equipeId: String(args.equipeId) }
+        : {}
 
   const todas = await db.pendencia.findMany({
     where: { ...ondeEquipe, criador: { empresaId } },
@@ -126,6 +133,13 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
       const pb = b.prazo ? b.prazo.getTime() : Number.MAX_SAFE_INTEGER
       return pa - pb
     })
+  const minhasPendencias = todas
+    .filter((p) => p.responsavelId === ctx.usuarioId && p.status !== 'CANCELADA')
+    .sort((a, b) => {
+      const pa = a.prazo ? a.prazo.getTime() : Number.MAX_SAFE_INTEGER
+      const pb = b.prazo ? b.prazo.getTime() : Number.MAX_SAFE_INTEGER
+      return pa - pb
+    })
   const meuDiaRetornos = retornosPendentes.filter(
     (r) => r.responsavelId === ctx.usuarioId || r.responsavelId === null
   )
@@ -137,6 +151,7 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
     pendenciasHoje: deepIso(hoje),
     atrasadas: deepIso(atrasadas),
     proximas: deepIso(proximas),
+    minhasPendencias: deepIso(minhasPendencias),
     retornosPendentes: deepIso(retornosPendentes),
     retornosAtrasados: deepIso(retornosAtrasados),
     compromissosHoje: deepIso(compromissosHoje),

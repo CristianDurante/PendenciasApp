@@ -29,6 +29,7 @@ const HistoricoPage = lazy(() => import('./pages/HistoricoPage').then(({ Histori
 const ConfiguracoesPage = lazy(() => import('./pages/ConfiguracoesPage').then(({ ConfiguracoesPage }) => ({ default: ConfiguracoesPage })))
 
 function useAtalhosGlobais(): void {
+  const sessao = useAppStore((s) => s.sessao)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
   const setPainelBusca = useAppStore((s) => s.setPainelBusca)
   const modalAberto = useAppStore((s) => s.modalNovaPendencia.aberto)
@@ -42,7 +43,7 @@ function useAtalhosGlobais(): void {
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault()
-        abrirNovaPendencia()
+        if (sessao?.usuario.perfil !== 'USUARIO') abrirNovaPendencia()
         return
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -72,7 +73,7 @@ function useAtalhosGlobais(): void {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [abrirNovaPendencia, setPainelBusca, modalAberto, fecharNovaPendencia, painelBusca])
+  }, [sessao?.usuario.perfil, abrirNovaPendencia, setPainelBusca, modalAberto, fecharNovaPendencia, painelBusca])
 }
 
 function Shell(): ReactNode {
