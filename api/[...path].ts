@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { randomUUID } from 'node:crypto'
 import { criarAplicacao } from '../server/index'
 
 let aplicacao: ReturnType<typeof criarAplicacao> | undefined
@@ -10,9 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     app(req, res)
   } catch (error) {
     aplicacao = undefined
-    console.error('[api] Falha ao inicializar a aplicação', error)
+    const errorId = randomUUID()
+    console.error('[api] Falha ao inicializar a aplicação', { errorId, error })
     if (!res.headersSent) {
-      res.status(500).json({ ok: false, error: 'Não foi possível inicializar a API.' })
+      res.status(500).json({ ok: false, error: 'Não foi possível inicializar a API.', errorId })
     }
   }
 }
