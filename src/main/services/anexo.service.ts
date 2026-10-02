@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getPrisma, resolveDataDir } from '../db'
 import { AppError, exigirAcessoEquipe } from '../auth'
-import { EXTENSOES_ANEXO, TAMANHO_MAX_ANEXO } from '@shared/constants'
+import { EXTENSOES_ANEXO, TAMANHO_MAX_ANEXO } from '../../shared/constants'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'

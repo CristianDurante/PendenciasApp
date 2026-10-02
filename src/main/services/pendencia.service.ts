@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { AppError, exigirAcessoEquipe, temAcessoGlobal } from '../auth'
-import { PRIORIDADES, PENDENCIA_STATUS } from '@shared/constants'
+import { PRIORIDADES, PENDENCIA_STATUS } from '../../shared/constants'
 import type { ApiContext, FiltroPendencias, Pendencia, Prioridade, PendenciaStatus } from '@shared/types'
 import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 import {

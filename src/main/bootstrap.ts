@@ -1,6 +1,6 @@
 import { getPrisma } from './db'
 import { hashPassword } from './auth'
-import { CATEGORIAS_INICIAIS, TAGS_SUGERIDAS } from '@shared/constants'
+import { CATEGORIAS_INICIAIS, TAGS_SUGERIDAS } from '../shared/constants'
 
 export async function ensureBootstrap(): Promise<void> {
   const db = getPrisma()
