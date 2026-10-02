@@ -115,6 +115,61 @@ async function run(): Promise<void> {
   print('pendencia.criar', { id: p1.id, atrasada: p1.atrasada, progresso: p1.progresso })
   if (p1.atrasada) throw new Error('pendência com prazo futuro não deveria estar atrasada')
 
+  if (process.env.PENDENCIAS_SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    const conteudoEmail = Buffer.from([
+      'From: remetente@teste.invalid',
+      'To: destinatario@teste.invalid',
+      'Subject: Anexo EML - teste',
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+      '',
+      'Mensagem de teste do fluxo de anexos.',
+      ''
+    ].join('\r\n'))
+    let objectPath = ''
+    let anexoId = ''
+    let uploadConcluido = false
+    try {
+      const preparado = (await api('anexo', 'prepararUpload', {
+        pendenciaId: p1.id,
+        nomeOriginal: 'teste-email.eml',
+        tipo: 'eml',
+        tamanho: conteudoEmail.length
+      })) as { objectPath: string; uploadUrl: string; contentType: string }
+      objectPath = preparado.objectPath
+      if (preparado.contentType !== 'message/rfc822') throw new Error('MIME de arquivo EML incorreto')
+      const enviado = await fetch(preparado.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': preparado.contentType },
+        body: conteudoEmail
+      })
+      if (!enviado.ok) throw new Error(`upload de EML falhou com HTTP ${enviado.status}`)
+      uploadConcluido = true
+      const anexo = (await api('anexo', 'confirmarUpload', {
+        pendenciaId: p1.id,
+        objectPath,
+        nomeOriginal: 'teste-email.eml',
+        tipo: 'eml',
+        tamanho: conteudoEmail.length
+      })) as { id: string }
+      anexoId = anexo.id
+      const download = (await api('anexo', 'urlDownload', { id: anexoId })) as { url: string }
+      const baixado = await fetch(download.url)
+      if (!baixado.ok) throw new Error('download de EML assinado falhou')
+      if (Buffer.compare(Buffer.from(await baixado.arrayBuffer()), conteudoEmail) !== 0) {
+        throw new Error('conteúdo EML não foi preservado no upload/download')
+      }
+      await api('anexo', 'excluir', { id: anexoId })
+      anexoId = ''
+      print('anexo.supabase.eml', { upload: true, download: true, exclusao: true })
+    } finally {
+      if (anexoId) await api('anexo', 'excluir', { id: anexoId })
+      else if (objectPath && uploadConcluido) await api('anexo', 'descartarUpload', { pendenciaId: p1.id, objectPath })
+    }
+  } else {
+    print('anexo.supabase.eml', 'ignorado: configure armazenamento Supabase para executar o teste integrado')
+  }
+
   // Checklist toggle
   const chk = (await api('pendencia', 'obter', { id: p1.id })) as {
     checklist: Array<{ id: string }>

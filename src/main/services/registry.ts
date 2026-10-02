@@ -107,6 +107,10 @@ export const registry: Record<string, Record<string, Handler>> = {
   anexo: {
     listar: (ctx, a) => anexoService.listarAnexos(ctx, a),
     criar: (ctx, a) => anexoService.criarAnexo(ctx, a),
+    prepararUpload: (ctx, a) => anexoService.prepararUploadAnexo(ctx, a),
+    confirmarUpload: (ctx, a) => anexoService.confirmarUploadAnexo(ctx, a),
+    descartarUpload: (ctx, a) => anexoService.descartarUploadAnexo(ctx, a),
+    urlDownload: (ctx, a) => anexoService.obterUrlDownloadAnexo(ctx, a),
     conteudo: (ctx, a) => anexoService.obterConteudoAnexo(ctx, a),
     excluir: (ctx, a) => anexoService.excluirAnexo(ctx, a)
   },
@@ -244,7 +248,7 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
     if (
       ctx.perfil === 'USUARIO' &&
       ((req.resource === 'pendencia' && !['listar', 'obter', 'status'].includes(req.action)) ||
-        (req.resource === 'anexo' && ['criar', 'excluir'].includes(req.action)))
+        (req.resource === 'anexo' && ['criar', 'prepararUpload', 'confirmarUpload', 'descartarUpload', 'excluir'].includes(req.action)))
     ) {
       throw new AppError('Consultores podem apenas visualizar pendências e atualizar o status das que estão atribuídas a eles.', 403)
     }

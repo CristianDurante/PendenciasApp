@@ -57,13 +57,22 @@ export async function criarAplicacao(): Promise<express.Express> {
 
   const app = express()
   app.disable('x-powered-by')
+  const connectSrc = ["'self'"]
+  const supabaseUrl = process.env.PENDENCIAS_SUPABASE_URL || process.env.SUPABASE_URL
+  if (supabaseUrl) {
+    const supabaseOrigin = new URL(supabaseUrl)
+    if (supabaseOrigin.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+      throw new Error('PENDENCIAS_SUPABASE_URL deve usar HTTPS em produção')
+    }
+    connectSrc.push(supabaseOrigin.origin)
+  }
   app.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store')
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'")
+    res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src ${connectSrc.join(' ')}`)
     if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     next()
   })

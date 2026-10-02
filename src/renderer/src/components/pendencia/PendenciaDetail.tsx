@@ -29,7 +29,7 @@ import { Drawer, Button, Select, Avatar, TagBadge, PriorityBadge, StatusBadge, E
 import { TagPicker } from './TagPicker'
 import { useAppStore } from '../../store/appStore'
 import { useCatalogoStore } from '../../store/catalogoStore'
-import { call, downloadArquivo } from '../../lib/api'
+import { call, downloadArquivo, isElectron } from '../../lib/api'
 import { formatarData, formatarDataHora, formatarTamanho, cn, relativo } from '../../lib/format'
 
 type Aba = 'geral' | 'checklist' | 'comentarios' | 'anexos' | 'historico'
@@ -618,7 +618,7 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar, somenteLeit
   const enviar = async (arquivo: File): Promise<void> => {
     if (enviandoRef.current || operacao) return
     const ext = arquivo.name.split('.').pop()?.toLowerCase() || ''
-    const permitidas = ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'xlsx', 'txt']
+    const permitidas = ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'xlsx', 'txt', 'eml', 'msg']
     if (!permitidas.includes(ext)) {
       pushToast('erro', 'Extensão não permitida', `Apenas: ${permitidas.join(', ')}`)
       return
@@ -629,24 +629,56 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar, somenteLeit
     }
     enviandoRef.current = true
     setEnviando(true)
+    let objectPath: string | null = null
+    let uploadConcluidoNoStorage = false
+    let uploadConfirmado = false
     try {
-      const buffer = await arquivo.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-      let binario = ''
-      bytes.forEach((b) => {
-        binario += String.fromCharCode(b)
-      })
-      const base64 = btoa(binario)
-      await call('anexo', 'criar', {
-        pendenciaId,
-        nomeOriginal: arquivo.name,
-        tipo: ext,
-        tamanho: arquivo.size,
-        conteudoBase64: base64
-      })
+      if (isElectron()) {
+        const bytes = new Uint8Array(await arquivo.arrayBuffer())
+        let binario = ''
+        bytes.forEach((b) => { binario += String.fromCharCode(b) })
+        await call('anexo', 'criar', {
+          pendenciaId,
+          nomeOriginal: arquivo.name,
+          tipo: ext,
+          tamanho: arquivo.size,
+          conteudoBase64: btoa(binario)
+        })
+      } else {
+        const upload = await call<{ objectPath: string; uploadUrl: string; contentType: string }>(
+          'anexo',
+          'prepararUpload',
+          { pendenciaId, nomeOriginal: arquivo.name, tipo: ext, tamanho: arquivo.size }
+        )
+        objectPath = upload.objectPath
+        const response = await fetch(upload.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': upload.contentType, 'x-upsert': 'false' },
+          body: arquivo
+        })
+        if (!response.ok) {
+          const detalhe = (await response.text()).slice(0, 300)
+          console.error('[anexo] Upload direto ao Supabase falhou:', { status: response.status, detalhe })
+          throw new Error(`O Supabase Storage recusou o arquivo (HTTP ${response.status}). Verifique se o bucket "anexos" existe e está privado.`)
+        }
+        uploadConcluidoNoStorage = true
+        await call('anexo', 'confirmarUpload', {
+          pendenciaId,
+          objectPath: upload.objectPath,
+          nomeOriginal: arquivo.name,
+          tipo: ext,
+          tamanho: arquivo.size
+        })
+        uploadConfirmado = true
+      }
       pushToast('sucesso', 'Anexo adicionado', arquivo.name)
       await aoAtualizar()
     } catch (e) {
+      if (objectPath && uploadConcluidoNoStorage && !uploadConfirmado) {
+        await call('anexo', 'descartarUpload', { pendenciaId, objectPath }).catch((erro) => {
+          console.error('[anexo] Não foi possível remover upload incompleto:', erro)
+        })
+      }
       pushToast('erro', 'Erro ao enviar anexo', (e as Error).message)
     } finally {
       enviandoRef.current = false
@@ -656,8 +688,22 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar, somenteLeit
 
   const baixar = async (id: string): Promise<void> => {
     try {
-      const a = await call<{ nomeOriginal: string; tipo: string; conteudoBase64: string }>('anexo', 'conteudo', { id })
-      downloadArquivo(a.nomeOriginal, a.conteudoBase64, a.tipo)
+      if (isElectron()) {
+        const a = await call<{ nomeOriginal: string; tipo: string; conteudoBase64: string }>('anexo', 'conteudo', { id })
+        downloadArquivo(a.nomeOriginal, a.conteudoBase64, a.tipo)
+      } else {
+        const a = await call<{ url: string; nomeOriginal: string }>('anexo', 'urlDownload', { id })
+        const response = await fetch(a.url)
+        if (!response.ok) throw new Error(`O Supabase Storage recusou o download (HTTP ${response.status}).`)
+        const url = URL.createObjectURL(await response.blob())
+        const link = document.createElement('a')
+        link.href = url
+        link.download = a.nomeOriginal
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+      }
     } catch (e) {
       pushToast('erro', 'Erro ao baixar', (e as Error).message)
     }
@@ -684,11 +730,11 @@ function AnexosSection({ pendenciaId, anexos, operacao, aoAtualizar, somenteLeit
       )}>
         {enviando ? <Spinner /> : <Upload className="h-8 w-8" />}
         <span className="text-sm font-medium">{enviando ? 'Enviando...' : 'Clique para enviar anexo'}</span>
-        <span className="text-xs text-slate-400">PDF, PNG, JPG, DOCX, XLSX ou TXT · máx. 15 MB</span>
+        <span className="text-xs text-slate-400">PDF, PNG, JPG, DOCX, XLSX, TXT, EML ou MSG · máx. 15 MB</span>
         <input
           type="file"
           className="hidden"
-          accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt"
+          accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt,.eml,.msg"
           disabled={ocupado}
           onChange={(e) => {
             const f = e.target.files?.[0]

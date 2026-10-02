@@ -77,7 +77,9 @@ export function downloadArquivo(nome: string, conteudoBase64: string, tipo: stri
     jpeg: 'image/jpeg',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    txt: 'text/plain'
+    txt: 'text/plain',
+    eml: 'message/rfc822',
+    msg: 'application/vnd.ms-outlook'
   }
   const byteCharacters = atob(conteudoBase64)
   const byteNumbers = new Array(byteCharacters.length)

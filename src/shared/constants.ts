@@ -161,7 +161,7 @@ export const RECORRENCIA_OPCOES = [
   { value: 'anual', label: 'Anual' }
 ]
 
-export const EXTENSOES_ANEXO = ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'xlsx', 'txt']
+export const EXTENSOES_ANEXO = ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'xlsx', 'txt', 'eml', 'msg']
 export const TAMANHO_MAX_ANEXO = 15 * 1024 * 1024 // 15MB
 
 export const DEPARTAMENTOS_SUGERIDOS = [
