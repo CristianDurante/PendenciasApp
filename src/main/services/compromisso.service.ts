@@ -4,7 +4,7 @@ import { USUARIO_RESUMO } from './resumo'
 import { AppError, requireEmpresa } from '../auth'
 import { COMPROMISSO_STATUS, LEMBRETES_OPCOES } from '../../shared/constants'
 import type { ApiContext, CompromissoStatus } from '@shared/types'
-import { deepIso, dataInicioDoDia, dataFimDoDia } from '../helpers'
+import { containsInsensitive, deepIso, dataInicioDoDia, dataFimDoDia } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { criarNotificacao, notificacaoDesktop } from './notificacao.service'
 import { parseISO, subMinutes } from 'date-fns'
@@ -42,7 +42,7 @@ export async function listarCompromissos(ctx: ApiContext, args: Record<string, u
     where: {
       cliente: { empresaId },
       ...(busca
-        ? { OR: [{ titulo: { contains: busca } }, { descricao: { contains: busca } }, { local: { contains: busca } }] }
+        ? { OR: [{ titulo: containsInsensitive(busca) }, { descricao: containsInsensitive(busca) }, { local: containsInsensitive(busca) }] }
         : {}),
       ...(clienteId ? { clienteId } : {}),
       ...(de ? { data: { gte: de } } : {}),

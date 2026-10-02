@@ -9,6 +9,8 @@ import type {
 
 export const PERFIS: Perfil[] = ['ADMIN', 'GESTOR', 'USUARIO']
 
+export const EQUIPE_SEM_EQUIPE_ID = 'equipe-sem-equipe'
+
 export const PERFIL_LABEL: Record<Perfil, string> = {
   ADMIN: 'Administrador',
   GESTOR: 'Gestor de Projetos (GP)',

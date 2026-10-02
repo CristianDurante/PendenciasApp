@@ -4,7 +4,7 @@ import { USUARIO_RESUMO } from './resumo'
 import { AppError, requireEmpresa } from '../auth'
 import { RETORNO_STATUS } from '../../shared/constants'
 import type { ApiContext, RetornoStatus } from '@shared/types'
-import { deepIso } from '../helpers'
+import { containsInsensitive, deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { parseISO } from 'date-fns'
 
@@ -28,7 +28,7 @@ export async function listarRetornos(ctx: ApiContext, args: Record<string, unkno
   const itens = await db.retorno.findMany({
     where: {
       cliente: { empresaId },
-      ...(busca ? { OR: [{ assunto: { contains: busca } }, { contato: { contains: busca } }] } : {}),
+      ...(busca ? { OR: [{ assunto: containsInsensitive(busca) }, { contato: containsInsensitive(busca) }] } : {}),
       ...(status ? { status } : {}),
       ...(clienteId ? { clienteId } : {}),
       ...(responsavelId ? { responsavelId } : {})

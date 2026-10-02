@@ -1,3 +1,8 @@
+export function containsInsensitive(texto: string) {
+  const usaPostgres = !!process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('file:')
+  return usaPostgres ? { contains: texto, mode: 'insensitive' as const } : { contains: texto }
+}
+
 export function deepIso<T>(value: unknown): T {
   if (value === null || value === undefined) return value as T
   if (value instanceof Date) return value.toISOString() as T

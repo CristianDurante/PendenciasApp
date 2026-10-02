@@ -1,6 +1,6 @@
 import { getPrisma } from './db'
 import { hashPassword } from './auth'
-import { CATEGORIAS_INICIAIS, TAGS_SUGERIDAS } from '../shared/constants'
+import { CATEGORIAS_INICIAIS, EQUIPE_SEM_EQUIPE_ID, TAGS_SUGERIDAS } from '../shared/constants'
 
 export async function ensureBootstrap(): Promise<void> {
   const db = getPrisma()
@@ -15,6 +15,14 @@ export async function ensureBootstrap(): Promise<void> {
         data: { nome: process.env.PENDENCIAS_EMPRESA_NOME || 'Minha empresa' }
       })
       console.log('[bootstrap] Empresa inicial criada')
+    }
+
+    const equipeSemEquipe = await tx.equipe.findUnique({ where: { id: EQUIPE_SEM_EQUIPE_ID } })
+    if (!equipeSemEquipe) {
+      await tx.equipe.create({
+        data: { id: EQUIPE_SEM_EQUIPE_ID, nome: 'Sem equipe' }
+      })
+      console.log('[bootstrap] Equipe padrão "Sem equipe" criada')
     }
 
     const adminCount = await tx.usuario.count({ where: { perfil: 'ADMIN' } })

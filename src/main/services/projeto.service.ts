@@ -4,7 +4,7 @@ import { USUARIO_RESUMO } from './resumo'
 import { AppError, requireEmpresa } from '../auth'
 import { PROJETO_STATUS } from '../../shared/constants'
 import type { ApiContext } from '@shared/types'
-import { deepIso } from '../helpers'
+import { containsInsensitive, deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 
 const ProjetoSchema = z.object({
@@ -25,7 +25,7 @@ export async function listarProjetos(ctx: ApiContext, args: Record<string, unkno
   const itens = await db.projeto.findMany({
     where: {
       cliente: { empresaId },
-      ...(busca ? { OR: [{ nome: { contains: busca } }, { descricao: { contains: busca } }] } : {}),
+      ...(busca ? { OR: [{ nome: containsInsensitive(busca) }, { descricao: containsInsensitive(busca) }] } : {}),
       ...(status ? { status } : {})
     },
     include: { cliente: true, responsavel: { select: USUARIO_RESUMO } },

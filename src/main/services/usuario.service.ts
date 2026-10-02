@@ -2,11 +2,10 @@ import { z } from 'zod'
 import { getPrisma } from '../db'
 import { AppError, hashPassword, requireAdminOrGestor, requireRoles, obterUsuarioPorId, requireEmpresa } from '../auth'
 import type { ApiContext, Perfil } from '@shared/types'
-import { PERFIS } from '../../shared/constants'
+import { EQUIPE_SEM_EQUIPE_ID, PERFIS } from '../../shared/constants'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 import { addDays } from 'date-fns'
-import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 
 const UsuarioCreateSchema = z.object({
   nome: z.string().min(2, 'Nome é obrigatório').max(120),

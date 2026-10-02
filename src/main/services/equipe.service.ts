@@ -4,8 +4,7 @@ import { AppError, requireEmpresa, requireRoles } from '../auth'
 import type { ApiContext } from '@shared/types'
 import { deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
-
-export const EQUIPE_SEM_EQUIPE_ID = 'equipe-sem-equipe'
+import { EQUIPE_SEM_EQUIPE_ID } from '../../shared/constants'
 
 const EquipeCreateSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório').max(120),

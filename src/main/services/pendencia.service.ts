@@ -2,11 +2,11 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getPrisma } from '../db'
 import { AppError, exigirAcessoEquipe, temAcessoGlobal } from '../auth'
-import { PRIORIDADES, PENDENCIA_STATUS } from '../../shared/constants'
+import { EQUIPE_SEM_EQUIPE_ID, PRIORIDADES, PENDENCIA_STATUS } from '../../shared/constants'
 import type { ApiContext, FiltroPendencias, Pendencia, Prioridade, PendenciaStatus } from '@shared/types'
-import { EQUIPE_SEM_EQUIPE_ID } from './equipe.service'
 import {
   deepIso,
+  containsInsensitive,
   isAtrasada,
   calcularProgresso,
   dataInicioDoDia,
@@ -95,11 +95,11 @@ function buildWhere(filtro: FiltroPendencias): Prisma.PendenciaWhereInput {
   const busca = filtro.busca?.trim().toLowerCase()
   if (busca) {
     where.OR = [
-      { titulo: { contains: busca } },
-      { descricao: { contains: busca } },
-      { sistema: { contains: busca } },
-      { departamento: { contains: busca } },
-      { observacoes: { contains: busca } }
+      { titulo: containsInsensitive(busca) },
+      { descricao: containsInsensitive(busca) },
+      { sistema: containsInsensitive(busca) },
+      { departamento: containsInsensitive(busca) },
+      { observacoes: containsInsensitive(busca) }
     ]
   }
   if (filtro.status && filtro.status.length) where.status = { in: filtro.status }

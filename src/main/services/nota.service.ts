@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { getPrisma } from '../db'
 import { AppError } from '../auth'
 import type { ApiContext } from '@shared/types'
-import { deepIso } from '../helpers'
+import { containsInsensitive, deepIso } from '../helpers'
 import { registrarHistorico } from './historico.service'
 
 const NotaSchema = z.object({
@@ -24,7 +24,7 @@ export async function listarNotas(ctx: ApiContext, args: Record<string, unknown>
   const itens = await db.nota.findMany({
     where: {
       usuarioId: ctx.usuarioId,
-      ...(busca ? { OR: [{ titulo: { contains: busca } }, { conteudo: { contains: busca } }] } : {}),
+      ...(busca ? { OR: [{ titulo: containsInsensitive(busca) }, { conteudo: containsInsensitive(busca) }] } : {}),
       ...(clienteId ? { clienteId } : {}),
       ...(projetoId ? { projetoId } : {}),
       ...(pendenciaId ? { pendenciaId } : {}),

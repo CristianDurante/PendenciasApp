@@ -3,7 +3,7 @@ import { getPrisma } from '../db'
 import { USUARIO_RESUMO } from './resumo'
 import { AppError, requireEmpresa } from '../auth'
 import type { ApiContext, DadosClienteDetail } from '@shared/types'
-import { deepIso, isAtrasada } from '../helpers'
+import { containsInsensitive, deepIso, isAtrasada } from '../helpers'
 import { registrarHistorico } from './historico.service'
 
 const ClienteSchema = z.object({
@@ -31,10 +31,10 @@ export async function listarClientes(ctx: ApiContext, args: Record<string, unkno
       ...(busca
         ? {
             OR: [
-              { nome: { contains: busca } },
-              { empresa: { contains: busca } },
-              { contato: { contains: busca } },
-              { email: { contains: busca } }
+              { nome: containsInsensitive(busca) },
+              { empresa: containsInsensitive(busca) },
+              { contato: containsInsensitive(busca) },
+              { email: containsInsensitive(busca) }
             ]
           }
         : {})
