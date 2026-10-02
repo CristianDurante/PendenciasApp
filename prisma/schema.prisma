@@ -24,6 +24,7 @@ model Empresa {
   usuarios  Usuario[]
   clientes  Cliente[]
   equipes   Equipe[]
+  projetos  Projeto[]
 
   @@map("empresas")
 }
@@ -121,15 +122,18 @@ model Projeto {
   status        String   @default("ATIVO") // ATIVO | PAUSADO | CONCLUIDO | ENCERRADO
   responsavelId String?
   clienteId     String?
+  empresaId     String?
   dataInicio    DateTime?
   dataFim       DateTime?
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
 
+  empresa      Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   cliente      Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   responsavel  Usuario?     @relation("ProjetoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   pendencias   Pendencia[]
 
+  @@index([empresaId])
   @@map("projetos")
 }
 

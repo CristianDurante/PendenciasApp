@@ -81,6 +81,7 @@ export interface Projeto {
   status: ProjetoStatus
   responsavelId: string | null
   clienteId: string | null
+  empresaId: string | null
   dataInicio: string | null
   dataFim: string | null
   criadoEm: string

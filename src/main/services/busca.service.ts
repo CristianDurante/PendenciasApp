@@ -43,7 +43,7 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       take: limite
     }),
     db.projeto.findMany({
-      where: { cliente: { empresaId }, OR: [{ nome: containsInsensitive(termo) }, { descricao: containsInsensitive(termo) }] },
+      where: { empresaId, OR: [{ nome: containsInsensitive(termo) }, { descricao: containsInsensitive(termo) }] },
       include: { cliente: true },
       orderBy: { nome: 'asc' },
       take: limite

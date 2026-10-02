@@ -186,10 +186,6 @@ function ProjetoModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
       setErro('Informe o nome do projeto.')
       return
     }
-    if (!editando && !form.clienteId) {
-      setErro('Selecione o cliente do projeto.')
-      return
-    }
     setSalvando(true)
     try {
       await aoSalvar({ ...form, status: form.status || 'ATIVO' })
@@ -214,9 +210,9 @@ function ProjetoModal({ aberto, aoFechar, editando, aoSalvar }: { aberto: boolea
           </Select>
         </div>
         <div>
-          <label className="label">Cliente *</label>
+          <label className="label">Cliente (opcional)</label>
           <Select value={form.clienteId} onChange={(e) => setForm((f) => ({ ...f, clienteId: e.target.value }))}>
-            <option value="">Selecione um cliente</option>
+            <option value="">Sem cliente</option>
             {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </Select>
         </div>

@@ -12,7 +12,7 @@ const ProjetoSchema = z.object({
   descricao: z.string().max(2000).optional().nullable(),
   status: z.enum(PROJETO_STATUS as [string, ...string[]]).optional(),
   responsavelId: z.string().optional().nullable(),
-  clienteId: z.string().min(1, 'Cliente é obrigatório'),
+  clienteId: z.string().optional().nullable(),
   dataInicio: z.string().optional().nullable(),
   dataFim: z.string().optional().nullable()
 })
@@ -24,7 +24,7 @@ export async function listarProjetos(ctx: ApiContext, args: Record<string, unkno
   const status = args.status ? String(args.status) : ''
   const itens = await db.projeto.findMany({
     where: {
-      cliente: { empresaId },
+      empresaId,
       ...(busca ? { OR: [{ nome: containsInsensitive(busca) }, { descricao: containsInsensitive(busca) }] } : {}),
       ...(status ? { status } : {})
     },
@@ -55,7 +55,7 @@ export async function obterProjeto(ctx: ApiContext, args: Record<string, unknown
   const db = getPrisma()
   const id = String(args.id || '')
   const p = await db.projeto.findFirst({
-    where: { id, cliente: { empresaId } },
+    where: { id, empresaId },
     include: { cliente: true, responsavel: { select: USUARIO_RESUMO } }
   })
   if (!p) throw new AppError('Projeto não encontrado', 404)
@@ -71,8 +71,10 @@ export async function criarProjeto(ctx: ApiContext, args: Record<string, unknown
   const empresaId = requireEmpresa(ctx)
   const parsed = ProjetoSchema.parse(args)
   const db = getPrisma()
-  const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
-  if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  if (parsed.clienteId) {
+    const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
+    if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  }
   if (parsed.responsavelId) {
     const responsavel = await db.usuario.findFirst({ where: { id: parsed.responsavelId, empresaId }, select: { id: true } })
     if (!responsavel) throw new AppError('Responsável não encontrado na empresa atual', 404)
@@ -83,6 +85,7 @@ export async function criarProjeto(ctx: ApiContext, args: Record<string, unknown
       descricao: parsed.descricao || null,
       status: parsed.status || 'ATIVO',
       responsavelId: parsed.responsavelId || null,
+      empresaId,
       clienteId: parsed.clienteId || null,
       dataInicio: parsed.dataInicio ? new Date(parsed.dataInicio) : null,
       dataFim: parsed.dataFim ? new Date(parsed.dataFim) : null
@@ -104,8 +107,12 @@ export async function atualizarProjeto(ctx: ApiContext, args: Record<string, unk
   if (!id) throw new AppError('ID do projeto é obrigatório')
   const parsed = ProjetoSchema.partial().parse(args)
   const db = getPrisma()
-  const existente = await db.projeto.findFirst({ where: { id, cliente: { empresaId } } })
+  const existente = await db.projeto.findFirst({ where: { id, empresaId } })
   if (!existente) throw new AppError('Projeto não encontrado', 404)
+  if (parsed.clienteId) {
+    const cliente = await db.cliente.findFirst({ where: { id: parsed.clienteId, empresaId }, select: { id: true } })
+    if (!cliente) throw new AppError('Cliente não encontrado na empresa atual', 404)
+  }
   const p = await db.projeto.update({
     where: { id },
     data: {
@@ -135,7 +142,7 @@ export async function excluirProjeto(ctx: ApiContext, args: Record<string, unkno
   const id = String(args.id || '')
   if (!id) throw new AppError('ID do projeto é obrigatório')
   const db = getPrisma()
-  const existente = await db.projeto.findFirst({ where: { id, cliente: { empresaId } } })
+  const existente = await db.projeto.findFirst({ where: { id, empresaId } })
   if (!existente) throw new AppError('Projeto não encontrado', 404)
   await db.$transaction([
     db.pendencia.updateMany({ where: { projetoId: id }, data: { projetoId: null } }),
