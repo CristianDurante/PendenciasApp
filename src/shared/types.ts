@@ -396,6 +396,17 @@ export interface DadosDashboard {
   totalPendencias: number
 }
 
+export interface DadosMinhasAtividades {
+  pendencias: Pendencia[]
+  totalPendencias: number
+  pagina: number
+  porPagina: number
+  retornosPendentes: Retorno[]
+  retornosAtrasados: Retorno[]
+  compromissosHoje: Compromisso[]
+  proximosCompromissos: Compromisso[]
+}
+
 export interface ConfigApp {
   modulosSidebar?: {
     minhasAtividades: boolean

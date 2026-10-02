@@ -38,6 +38,7 @@ const formVazio: FormCompromisso = {
 
 export function CompromissosPage(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
+  const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const clientes = useCatalogoStore((s) => s.clientes)
   const usuarios = useCatalogoStore((s) => s.usuarios)
@@ -87,6 +88,7 @@ export function CompromissosPage(): ReactNode {
       await call('compromisso', 'criar', payload)
       pushToast('sucesso', 'Compromisso criado')
     }
+    notificarMudanca()
     setModalAberto(false)
     setEditando(null)
     await carregar()
@@ -95,6 +97,7 @@ export function CompromissosPage(): ReactNode {
   async function mudarStatus(c: Compromisso, status: string): Promise<void> {
     await call('compromisso', 'status', { id: c.id, status })
     pushToast('sucesso', 'Status atualizado')
+    notificarMudanca()
     await carregar()
   }
 
@@ -104,6 +107,7 @@ export function CompromissosPage(): ReactNode {
     try {
       await call('compromisso', 'excluir', { id: excluindo.id })
       pushToast('sucesso', 'Compromisso excluído')
+      notificarMudanca()
       setExcluindo(null)
       await carregar()
     } catch (e) {

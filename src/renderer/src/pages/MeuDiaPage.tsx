@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { RefreshCw, Sun, ListTodo, CalendarClock, MessageSquareReply, AlarmClock, Trash2, Plus } from 'lucide-react'
-import type { DadosDashboard, Lembrete } from '@shared/types'
+import type { Lembrete } from '@shared/types'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
 import { formatarDataHora, diasAte } from '../lib/format'
@@ -10,24 +10,20 @@ export function MeuDiaPage(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
+  const dados = useAppStore((s) => s.dashboard)
+  const dashboardLoading = useAppStore((s) => s.dashboardLoading)
+  const dashboardError = useAppStore((s) => s.dashboardError)
+  const carregarDashboard = useAppStore((s) => s.carregarDashboard)
+  const dataVersao = useAppStore((s) => s.dataVersao)
 
-  const [dados, setDados] = useState<DadosDashboard | null>(null)
-  const [carregando, setCarregando] = useState(true)
   const [modalLembrete, setModalLembrete] = useState(false)
   const [lembreteMsg, setLembreteMsg] = useState('')
   const [lembreteData, setLembreteData] = useState('')
   const [excluirLembrete, setExcluirLembrete] = useState<Lembrete | null>(null)
 
-  const carregar = useCallback(async (): Promise<void> => {
-    setCarregando(true)
-    const d = await call<DadosDashboard>('dashboard', 'obter').catch(() => null)
-    setDados(d)
-    setCarregando(false)
-  }, [])
-
   useEffect(() => {
-    void carregar()
-  }, [carregar])
+    void carregarDashboard()
+  }, [dataVersao, carregarDashboard])
 
   async function adicionarLembrete(): Promise<void> {
     if (!lembreteData || !lembreteMsg.trim()) {
@@ -41,7 +37,7 @@ export function MeuDiaPage(): ReactNode {
       setModalLembrete(false)
       setLembreteMsg('')
       setLembreteData('')
-      await carregar()
+      await carregarDashboard(true)
     } catch (e) {
       pushToast('erro', 'Falha ao criar lembrete', e instanceof Error ? e.message : undefined)
     }
@@ -49,17 +45,27 @@ export function MeuDiaPage(): ReactNode {
 
   async function excluirLembreteOk(): Promise<void> {
     if (!excluirLembrete) return
-    await call('lembrete', 'excluir', { id: excluirLembrete.id }).catch(() => null)
-    setExcluirLembrete(null)
-    pushToast('sucesso', 'Lembrete excluído')
-    await carregar()
+    try {
+      await call('lembrete', 'excluir', { id: excluirLembrete.id })
+      setExcluirLembrete(null)
+      pushToast('sucesso', 'Lembrete excluído')
+      await carregarDashboard(true)
+    } catch (e) {
+      pushToast('erro', 'Falha ao excluir lembrete', e instanceof Error ? e.message : undefined)
+    }
   }
 
-  if (carregando && !dados) {
+  if (dashboardLoading && !dados) {
     return <div className="flex h-full items-center justify-center"><Loading label="Carregando Meu Dia…" /></div>
   }
   if (!dados) {
-    return <EmptyState titulo="Não foi possível carregar" />
+    return (
+      <EmptyState
+        titulo="Não foi possível carregar"
+        descricao={dashboardError || undefined}
+        acao={<Button variant="secondary" onClick={() => void carregarDashboard(true)}>Tentar novamente</Button>}
+      />
+    )
   }
 
   const pend = dados.meuDia.pendencias
@@ -68,7 +74,13 @@ export function MeuDiaPage(): ReactNode {
   const nome = sessao?.usuario.nome?.split(' ')[0] || ''
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="h-full space-y-4 overflow-y-auto p-4">
+      {dashboardError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>Não foi possível atualizar os dados: {dashboardError}</span>
+          <Button variant="secondary" size="sm" onClick={() => void carregarDashboard(true)}>Tentar novamente</Button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
@@ -78,7 +90,7 @@ export function MeuDiaPage(): ReactNode {
             {nome ? `${nome}, ` : ''}aqui está o seu foco de hoje: {pend.length} pendência(s), {comp.length} compromisso(s) e {ret.length} retorno(s).
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => void carregar()}>
+        <Button variant="secondary" size="sm" onClick={() => void carregarDashboard(true)}>
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar
         </Button>
       </div>

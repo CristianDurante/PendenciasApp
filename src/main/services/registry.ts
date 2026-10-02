@@ -138,7 +138,8 @@ export const registry: Record<string, Record<string, Handler>> = {
     excluir: (ctx, a) => retornoService.excluirRetorno(ctx, a)
   },
   dashboard: {
-    obter: (ctx, a) => dashboardService.obterDashboard(ctx, a)
+    obter: (ctx, a) => dashboardService.obterDashboard(ctx, a),
+    atividades: (ctx, a) => dashboardService.obterMinhasAtividades(ctx, a)
   },
   busca: {
     global: (ctx, a) => buscaService.buscaGlobal(ctx, a)

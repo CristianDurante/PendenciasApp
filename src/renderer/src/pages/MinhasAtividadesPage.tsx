@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ClipboardList, CheckCircle2, RotateCcw, ListTodo, MessageSquareReply, CalendarClock } from 'lucide-react'
-import type { DadosDashboard, Pendencia, Retorno, Compromisso } from '@shared/types'
+import type { DadosMinhasAtividades, Pendencia } from '@shared/types'
 import { PENDENCIA_STATUS, PENDENCIA_STATUS_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
 import { call } from '../lib/api'
 import { formatarData, diasAte } from '../lib/format'
 import { Button, PriorityBadge, StatusBadge, RetornoStatusBadge, CompromissoStatusBadge, Avatar, Loading, EmptyState, Select } from '../components/ui'
+
+const INTERVALO_POLLING_MS = 60_000
+const INTERVALO_MAXIMO_MS = 5 * 60_000
+const INTERVALO_FOCO_MINIMO_MS = 15_000
 
 export function MinhasAtividadesPage(): ReactNode {
   const sessao = useAppStore((s) => s.sessao)
@@ -14,58 +18,136 @@ export function MinhasAtividadesPage(): ReactNode {
   const dataVersao = useAppStore((s) => s.dataVersao)
   const notificarMudanca = useAppStore((s) => s.notificarMudanca)
 
-  const [dados, setDados] = useState<DadosDashboard | null>(null)
+  const [dados, setDados] = useState<DadosMinhasAtividades | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [busy, setBusy] = useState('')
-  const requisicaoAtual = useRef(0)
+  const [paginaPendencias, setPaginaPendencias] = useState(1)
+  const [atualizadoEm, setAtualizadoEm] = useState<number | null>(null)
+  const falhasConsecutivas = useRef(0)
+  const ultimaConsulta = useRef(0)
+  const paginaAtualRef = useRef(paginaPendencias)
+  const versaoAtualRef = useRef(dataVersao)
+  const requisicaoEmAndamento = useRef<{ pagina: number; versao: number; promise: Promise<void> } | null>(null)
+  paginaAtualRef.current = paginaPendencias
+  versaoAtualRef.current = dataVersao
 
   const carregar = useCallback(async (): Promise<void> => {
-    const requisicao = ++requisicaoAtual.current
-    setCarregando(true)
-    try {
-      const d = await call<DadosDashboard>('dashboard', 'obter')
-      if (requisicao !== requisicaoAtual.current) return
-      setDados(d)
-      setErro('')
-    } catch (e) {
-      if (requisicao !== requisicaoAtual.current) return
-      setErro(e instanceof Error ? e.message : 'Não foi possível carregar suas atividades.')
-    } finally {
-      if (requisicao === requisicaoAtual.current) setCarregando(false)
+    const paginaSolicitada = paginaPendencias
+    const versaoSolicitada = dataVersao
+    const existente = requisicaoEmAndamento.current
+    if (existente?.pagina === paginaSolicitada && existente.versao === versaoSolicitada) {
+      return existente.promise
     }
-  }, [])
+    if (existente?.pagina === paginaSolicitada) {
+      await existente.promise
+      if (paginaAtualRef.current === paginaSolicitada) return carregarRef.current()
+      return
+    }
+
+    setCarregando(true)
+    ultimaConsulta.current = Date.now()
+    const controle: { promise?: Promise<void> } = {}
+    const requisicao = (async () => {
+      try {
+        const resultado = await call<DadosMinhasAtividades>('dashboard', 'atividades', {
+          pagina: paginaSolicitada,
+          porPagina: 5
+        })
+        if (paginaAtualRef.current !== paginaSolicitada || versaoAtualRef.current !== versaoSolicitada) return
+        setDados(resultado)
+        setErro('')
+        setAtualizadoEm(Date.now())
+        falhasConsecutivas.current = 0
+      } catch (e) {
+        if (paginaAtualRef.current !== paginaSolicitada || versaoAtualRef.current !== versaoSolicitada) return
+        falhasConsecutivas.current += 1
+        setErro(e instanceof Error ? e.message : 'Não foi possível carregar suas atividades.')
+      } finally {
+        if (requisicaoEmAndamento.current?.promise === controle.promise) {
+          requisicaoEmAndamento.current = null
+          setCarregando(false)
+        }
+      }
+    })()
+    controle.promise = requisicao
+    requisicaoEmAndamento.current = { pagina: paginaSolicitada, versao: versaoSolicitada, promise: requisicao }
+    return requisicao
+  }, [dataVersao, paginaPendencias])
+  const carregarRef = useRef(carregar)
+  carregarRef.current = carregar
 
   useEffect(() => {
-    void carregar()
+    let timer: number | undefined
+    let encerrado = false
+
+    const limparTimer = (): void => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer)
+        timer = undefined
+      }
+    }
+
+    const agendarProximaConsulta = (): void => {
+      if (encerrado || document.visibilityState !== 'visible') return
+      const expoente = Math.min(Math.max(falhasConsecutivas.current - 1, 0), 3)
+      const intervalo = Math.min(INTERVALO_POLLING_MS * 2 ** expoente, INTERVALO_MAXIMO_MS)
+      timer = window.setTimeout(() => {
+        timer = undefined
+        void consultarEAgendar()
+      }, intervalo)
+    }
+
+    const consultarEAgendar = async (): Promise<void> => {
+      if (encerrado || document.visibilityState !== 'visible') return
+      await carregar()
+      agendarProximaConsulta()
+    }
+
+    const aoMudarVisibilidade = (): void => {
+      limparTimer()
+      if (document.visibilityState === 'visible') void consultarEAgendar()
+    }
+
+    const aoReceberFoco = (): void => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - ultimaConsulta.current >= INTERVALO_FOCO_MINIMO_MS
+      ) {
+        limparTimer()
+        void consultarEAgendar()
+      }
+    }
+
+    document.addEventListener('visibilitychange', aoMudarVisibilidade)
+    window.addEventListener('focus', aoReceberFoco)
+    void consultarEAgendar()
+
     return () => {
-      requisicaoAtual.current += 1
+      encerrado = true
+      limparTimer()
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade)
+      window.removeEventListener('focus', aoReceberFoco)
     }
   }, [dataVersao, carregar])
 
-  const meuId = sessao?.usuario.id
   const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
+  const itensPorPagina = 5
+  const totalPaginas = Math.max(1, Math.ceil((dados?.totalPendencias || 0) / itensPorPagina))
+  const paginaAtual = Math.min(paginaPendencias, totalPaginas)
+  const pendenciasDaPagina = dados?.pagina === paginaAtual ? dados.pendencias : []
+  const meusRetornos = dados ? [...dados.retornosAtrasados, ...dados.retornosPendentes] : []
+  const meusCompromissos = dados ? [...dados.compromissosHoje, ...dados.proximosCompromissos] : []
 
-  const minhasPendencias: Pendencia[] = dados?.minhasPendencias || []
-  const unicos = minhasPendencias.filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-  const meusRetornos: Retorno[] = dados
-    ? [...dados.retornosAtrasados, ...dados.retornosPendentes].filter((r) => !r.responsavelId || r.responsavelId === meuId)
-    : []
-  const meusCompromissos: Compromisso[] = dados
-    ? [...dados.compromissosHoje, ...dados.proximosCompromissos].filter(
-        (c) =>
-          c.responsavelId === meuId ||
-          c.responsavelId === null ||
-          (!!meuId && (c.participantes || '').includes(meuId))
-      )
-    : []
+  useEffect(() => {
+    if (dados && paginaPendencias > totalPaginas) setPaginaPendencias(totalPaginas)
+  }, [dados, paginaPendencias, totalPaginas])
 
   async function concluir(p: Pendencia): Promise<void> {
     setBusy(p.id)
     try {
       await call('pendencia', 'concluir', { id: p.id })
       pushToast('sucesso', 'Pendência concluída')
-      await carregar()
       notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao concluir', e instanceof Error ? e.message : undefined)
@@ -79,7 +161,6 @@ export function MinhasAtividadesPage(): ReactNode {
     try {
       await call('pendencia', 'reabrir', { id: p.id })
       pushToast('sucesso', 'Pendência reaberta')
-      await carregar()
       notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao reabrir', e instanceof Error ? e.message : undefined)
@@ -93,7 +174,6 @@ export function MinhasAtividadesPage(): ReactNode {
     try {
       await call('pendencia', 'status', { id: p.id, status })
       pushToast('sucesso', 'Status atualizado')
-      await carregar()
       notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao atualizar status', e instanceof Error ? e.message : undefined)
@@ -102,21 +182,24 @@ export function MinhasAtividadesPage(): ReactNode {
     }
   }
 
-  if (carregando && !dados) {
+  if (carregando && (!dados || dados.pagina !== paginaAtual)) {
     return <div className="flex h-full items-center justify-center"><Loading label="Carregando atividades…" /></div>
   }
-  if (!dados) {
+  if (dados && dados.pagina !== paginaAtual && !erro) {
+    return <div className="flex h-full items-center justify-center"><Loading label="Atualizando a página…" /></div>
+  }
+  if (!dados || dados.pagina !== paginaAtual) {
     return (
       <EmptyState
         titulo="Não foi possível carregar"
-        descricao={erro}
+        descricao={erro || undefined}
         acao={<Button variant="secondary" onClick={() => void carregar()}>Tentar novamente</Button>}
       />
     )
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="h-full space-y-4 overflow-y-auto p-4">
       {erro && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
           <span>Não foi possível atualizar as atividades: {erro}</span>
@@ -127,19 +210,24 @@ export function MinhasAtividadesPage(): ReactNode {
         <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
           <ClipboardList className="h-6 w-6 text-brand-500" /> Minhas Atividades
         </h2>
+        <span className="text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+          {atualizadoEm
+            ? `Atualizado às ${new Date(atualizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · atualização automática`
+            : 'Atualização automática ativa'}
+        </span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-white">
             <ListTodo className="h-4 w-4 text-brand-500" /> Minhas pendências
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{unicos.length}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{dados.totalPendencias}</span>
           </h3>
-          {unicos.length === 0 ? (
+          {dados.totalPendencias === 0 ? (
             <p className="text-sm text-slate-400">Nenhuma pendência atribuída a você.</p>
           ) : (
             <div className="space-y-2">
-              {unicos.map((p) => (
+              {pendenciasDaPagina.map((p) => (
                 <div key={p.id} className="rounded-xl border border-slate-100 p-2.5 dark:border-slate-800">
                   <div className="flex items-center gap-2">
                     <PriorityBadge prioridade={p.prioridade} compacto />
@@ -181,6 +269,31 @@ export function MinhasAtividadesPage(): ReactNode {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {dados.totalPendencias > itensPorPagina && (
+            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Mostrando {(paginaAtual - 1) * itensPorPagina + 1}–{Math.min(paginaAtual * itensPorPagina, dados.totalPendencias)} de {dados.totalPendencias}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={paginaAtual === 1 || carregando}
+                  onClick={() => setPaginaPendencias(paginaAtual - 1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={paginaAtual === totalPaginas || carregando}
+                  onClick={() => setPaginaPendencias(paginaAtual + 1)}
+                >
+                  Próxima
+                </Button>
+              </div>
             </div>
           )}
         </div>

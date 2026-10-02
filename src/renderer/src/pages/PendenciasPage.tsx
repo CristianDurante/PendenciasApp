@@ -15,7 +15,6 @@ export function PendenciasPage(): ReactNode {
   const [params] = useSearchParams()
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
-  const carregarDashboard = useAppStore((s) => s.carregarDashboard)
   const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const dataVersao = useAppStore((s) => s.dataVersao)
   const clientes = useCatalogoStore((s) => s.clientes)
@@ -122,7 +121,6 @@ export function PendenciasPage(): ReactNode {
       }
       setSelecionadas([])
       await recarregar()
-      void carregarDashboard(true)
       notificarMudanca()
       pushToast('sucesso', 'Pendências concluídas', `${ids.length} pendência(s) concluída(s).`)
     } finally {
@@ -142,7 +140,6 @@ export function PendenciasPage(): ReactNode {
       setConfirmarExclusao(false)
       setSelecionadas([])
       await recarregar()
-      void carregarDashboard(true)
       notificarMudanca()
       pushToast('sucesso', 'Pendências excluídas')
     } finally {

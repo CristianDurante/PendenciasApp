@@ -51,6 +51,16 @@ function aplicarTema(tema: Tema): void {
 }
 
 let toastSeq = 0
+const DASHBOARD_CACHE_TTL_MS = 15_000
+const dashboardCache = new Map<string, { dados: DadosDashboard; carregadoEm: number }>()
+const dashboardRequests = new Map<string, Promise<void>>()
+let dashboardRequestId = 0
+
+function invalidarDashboardCache(): void {
+  dashboardCache.clear()
+  dashboardRequests.clear()
+  dashboardRequestId += 1
+}
 
 export const useAppStore = create<AppState>((set, get) => ({
   sessao: null,
@@ -69,13 +79,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   login: async (email, senha) => {
     const resultado = await call<LoginResult>('auth', 'login', { email, senha }, { semToken: true })
+    invalidarDashboardCache()
     setToken(resultado.sessao.token)
-    set({ sessao: resultado.sessao })
+    set({ sessao: resultado.sessao, dashboard: null, dashboardLoading: false, dashboardError: null })
   },
 
   definirSessao: (sessao) => {
+    invalidarDashboardCache()
     setToken(sessao.token)
-    set({ sessao })
+    set({ sessao, dashboard: null, dashboardLoading: false, dashboardError: null })
   },
 
   logout: async () => {
@@ -88,7 +100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     setToken(null)
-    set({ sessao: null, dashboard: null })
+    invalidarDashboardCache()
+    set({ sessao: null, dashboard: null, dashboardLoading: false, dashboardError: null })
   },
 
   carregarSessao: async () => {
@@ -127,17 +140,49 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPainelNotificacoes: (v) => set({ painelNotificacoes: v }),
 
   carregarDashboard: async (forcar = false, equipeId?: string) => {
-    if (get().dashboard && !forcar) return
-    set({ dashboardLoading: true, dashboardError: null })
-    try {
-      const dados = await call<DadosDashboard>('dashboard', 'obter', equipeId ? { equipeId } : {})
-      set({ dashboard: dados, dashboardLoading: false, dashboardError: null })
-    } catch (error) {
-      set({
-        dashboardLoading: false,
-        dashboardError: error instanceof Error ? error.message : 'Falha ao carregar o dashboard.'
-      })
+    const sessao = get().sessao
+    const chave = `${sessao?.usuario.id || 'anonimo'}:${equipeId || 'todas'}`
+    const cache = dashboardCache.get(chave)
+    if (!forcar && cache && Date.now() - cache.carregadoEm < DASHBOARD_CACHE_TTL_MS) {
+      set({ dashboard: cache.dados, dashboardLoading: false, dashboardError: null })
+      return
     }
+
+    const existente = dashboardRequests.get(chave)
+    if (existente) {
+      await existente
+      return
+    }
+
+    const requisicaoId = ++dashboardRequestId
+    if (get().dashboard !== cache?.dados) {
+      set({ dashboard: cache?.dados || null })
+    }
+    set({ dashboardLoading: true, dashboardError: null })
+
+    let requisicao: Promise<void>
+    requisicao = call<DadosDashboard>('dashboard', 'obter', equipeId ? { equipeId } : {})
+      .then((dados) => {
+        if (requisicaoId !== dashboardRequestId) return
+        dashboardCache.set(chave, { dados, carregadoEm: Date.now() })
+        if (dashboardCache.size > 5) {
+          const chaveMaisAntiga = dashboardCache.keys().next().value
+          if (chaveMaisAntiga) dashboardCache.delete(chaveMaisAntiga)
+        }
+        set({ dashboard: dados, dashboardLoading: false, dashboardError: null })
+      })
+      .catch((error: unknown) => {
+        if (requisicaoId !== dashboardRequestId) return
+        set({
+          dashboardLoading: false,
+          dashboardError: error instanceof Error ? error.message : 'Falha ao carregar o dashboard.'
+        })
+      })
+      .finally(() => {
+        if (dashboardRequests.get(chave) === requisicao) dashboardRequests.delete(chave)
+      })
+    dashboardRequests.set(chave, requisicao)
+    await requisicao
   },
 
   atualizarPendenciaNoState: (p) => {
@@ -156,7 +201,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   definirModulosSidebar: (modulos) => set({ modulosSidebar: modulos }),
 
-  notificarMudanca: () => set((s) => ({ dataVersao: s.dataVersao + 1 }))
+  notificarMudanca: () => {
+    invalidarDashboardCache()
+    set((s) => ({ dataVersao: s.dataVersao + 1 }))
+  }
 }))
 
 aplicarTema(useAppStore.getState().tema)

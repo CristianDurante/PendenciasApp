@@ -46,13 +46,13 @@ export function DashboardPage(): ReactNode {
   const [equipeFiltro, setEquipeFiltro] = useState('')
 
   useEffect(() => {
-    void carregarDashboard(true, ehAdmin ? (equipeFiltro || undefined) : undefined)
+    void carregarDashboard(false, ehAdmin ? (equipeFiltro || undefined) : undefined)
     void carregarNotificacoes()
     void carregarCatalogo()
   }, [carregarDashboard, carregarNotificacoes, carregarCatalogo, equipeFiltro, ehAdmin])
 
   useEffect(() => {
-    if (dataVersao > 0) void carregarDashboard(true, ehAdmin ? (equipeFiltro || undefined) : undefined)
+    if (dataVersao > 0) void carregarDashboard(false, ehAdmin ? (equipeFiltro || undefined) : undefined)
   }, [dataVersao, carregarDashboard, equipeFiltro, ehAdmin])
 
   const nome = sessao?.usuario.nome?.split(' ')[0] || ''
@@ -94,6 +94,14 @@ export function DashboardPage(): ReactNode {
 
   return (
     <div className="h-full overflow-y-auto p-4">
+      {dashboardError && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>Não foi possível atualizar os indicadores: {dashboardError}</span>
+          <Button variant="secondary" size="sm" onClick={() => void carregarDashboard(true, ehAdmin ? (equipeFiltro || undefined) : undefined)}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{nome ? `Olá, ${nome}` : 'Olá'}</h2>

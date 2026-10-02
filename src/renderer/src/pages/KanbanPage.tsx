@@ -14,7 +14,6 @@ export function KanbanPage(): ReactNode {
   const abrirPendencia = useAppStore((s) => s.abrirPendencia)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
   const pushToast = useAppStore((s) => s.pushToast)
-  const carregarDashboard = useAppStore((s) => s.carregarDashboard)
   const notificarMudanca = useAppStore((s) => s.notificarMudanca)
   const carregarCatalogo = useCatalogoStore((s) => s.carregarCatalogo)
   const dataVersao = useAppStore((s) => s.dataVersao)
@@ -46,7 +45,6 @@ export function KanbanPage(): ReactNode {
     try {
       await call('pendencia', 'status', { id: p.id, status: statusNovo })
       await recarregar()
-      void carregarDashboard(true)
       notificarMudanca()
     } catch (e) {
       pushToast('erro', 'Falha ao mover', e instanceof Error ? e.message : undefined)

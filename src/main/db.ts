@@ -59,6 +59,17 @@ function deveUsarFallbackSqlite(): boolean {
   return process.env.PENDENCIAS_ALLOW_SQLITE_FALLBACK === '1' && process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'production'
 }
 
+function urlPostgresVercel(): string {
+  const url = new URL(process.env.DATABASE_URL!)
+  if (process.env.VERCEL === '1') {
+    url.searchParams.set('connection_limit', '1')
+    if (url.port === '6543') {
+      url.searchParams.set('pgbouncer', 'true')
+    }
+  }
+  return url.toString()
+}
+
 async function tentarConexaoPostgres(): Promise<boolean> {
   if (!usaPostgres()) return true
   const db = getPrisma()
@@ -98,7 +109,9 @@ function migrarBancoLegado(dbPath: string): void {
 export function getPrisma(): PrismaClient {
   if (prisma) return prisma
   if (usaPostgres()) {
-    prisma = new PrismaClient()
+    prisma = new PrismaClient({
+      datasources: { db: { url: urlPostgresVercel() } }
+    })
     return prisma
   }
   const dbPath = resolveDbPath()

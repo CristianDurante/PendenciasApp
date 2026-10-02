@@ -1,6 +1,6 @@
 import { getPrisma } from '../db'
 import { requireEmpresa, temAcessoGlobal } from '../auth'
-import type { ApiContext, DadosDashboard } from '@shared/types'
+import type { ApiContext, DadosDashboard, DadosMinhasAtividades, Pendencia } from '@shared/types'
 import { EQUIPE_SEM_EQUIPE_ID } from '../../shared/constants'
 import { deepIso, isAtrasada, dataInicioDoDia, dataFimDoDia, addDias } from '../helpers'
 import { pendenciaInclude } from './pendencia.service'
@@ -173,4 +173,83 @@ export async function obterDashboard(ctx: ApiContext, args: Record<string, unkno
     totalPendencias: todas.length
   }
   return dto
+}
+
+export async function obterMinhasAtividades(ctx: ApiContext, args: Record<string, unknown> = {}): Promise<DadosMinhasAtividades> {
+  const empresaId = requireEmpresa(ctx)
+  const db = getPrisma()
+  const pagina = Math.max(1, Math.floor(Number(args.pagina) || 1))
+  const porPagina = Math.min(20, Math.max(1, Math.floor(Number(args.porPagina) || 5)))
+  const hojeInicio = dataInicioDoDia()
+  const hojeFim = dataFimDoDia()
+  const proxFim = dataFimDoDia(addDias(new Date(), 7))
+
+  const ondeEquipe =
+    !temAcessoGlobal(ctx)
+      ? ctx.equipeId
+        ? { equipeId: ctx.equipeId }
+        : { OR: [{ equipeId: null }, { equipeId: EQUIPE_SEM_EQUIPE_ID }] }
+      : {}
+
+  const ondePendencias = {
+    ...ondeEquipe,
+    criador: { empresaId },
+    responsavelId: ctx.usuarioId,
+    status: { not: 'CANCELADA' }
+  }
+
+  const [totalPendencias, itensPendencia] = await db.$transaction([
+    db.pendencia.count({ where: ondePendencias }),
+    db.pendencia.findMany({
+      where: ondePendencias,
+      include: { cliente: { select: { id: true, nome: true } } },
+      orderBy: [{ prazo: { sort: 'asc', nulls: 'last' } }, { criadoEm: 'desc' }],
+      skip: (pagina - 1) * porPagina,
+      take: porPagina
+    })
+  ])
+
+  const retornos = await db.retorno.findMany({
+    where: {
+      cliente: { empresaId },
+      status: { in: ['PENDENTE', 'EM_CONTATO', 'AGUARDANDO_CLIENTE'] },
+      OR: [{ responsavelId: ctx.usuarioId }, { responsavelId: null }]
+    },
+    include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true } } },
+    orderBy: [{ dataPrevista: 'asc' }]
+  })
+  const retornosPendentes = retornos.filter((r) => !r.dataPrevista || r.dataPrevista >= hojeInicio)
+  const retornosAtrasados = retornos.filter((r) => r.dataPrevista && r.dataPrevista < hojeInicio)
+
+  const compromissos = await db.compromisso.findMany({
+    where: {
+      cliente: { empresaId },
+      data: { gte: hojeInicio, lte: proxFim },
+      status: { in: ['AGENDADO', 'CONFIRMADO'] },
+      OR: [
+        { responsavelId: ctx.usuarioId },
+        { responsavelId: null },
+        { participantes: { contains: ctx.usuarioId } }
+      ]
+    },
+    include: { cliente: { select: { id: true, nome: true } }, responsavel: { select: { id: true, nome: true, avatar: true } } },
+    orderBy: [{ data: 'asc' }, { horaInicio: 'asc' }]
+  })
+  const compromissosHoje = compromissos.filter((c) => c.data >= hojeInicio && c.data <= hojeFim)
+  const proximosCompromissos = compromissos.filter((c) => c.data > hojeFim)
+  const pendencias = deepIso<Pendencia[]>(itensPendencia).map((p) => ({
+    ...p,
+    atrasada: isAtrasada(p.prazo ? new Date(p.prazo) : null, p.status)
+  }))
+
+  return {
+    pendencias,
+    totalPendencias,
+    pagina,
+    porPagina,
+    retornosPendentes: deepIso(retornosPendentes),
+    retornosAtrasados: deepIso(retornosAtrasados),
+    compromissosHoje: deepIso(compromissosHoje),
+    proximosCompromissos: deepIso(proximosCompromissos)
+  }
 }

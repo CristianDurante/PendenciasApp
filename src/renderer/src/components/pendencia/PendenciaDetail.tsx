@@ -42,9 +42,7 @@ export function PendenciaDetail(): ReactNode {
   const pushToast = useAppStore((s) => s.pushToast)
   const atualizarNoState = useAppStore((s) => s.atualizarPendenciaNoState)
   const notificarMudanca = useAppStore((s) => s.notificarMudanca)
-  const carregarDashboard = useAppStore((s) => s.carregarDashboard)
   const usuarios = useCatalogoStore((s) => s.usuarios)
-  const recarregarCatalogo = useCatalogoStore((s) => s.recarregar)
   const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
 
   // Usa somente o ID (estável) para evitar loop de re-renderização.
@@ -91,7 +89,7 @@ export function PendenciaDetail(): ReactNode {
   }, [carregar])
 
   const executarAcao = useCallback(
-    async (fn: () => Promise<unknown>, msgSucesso?: string): Promise<void> => {
+    async (fn: () => Promise<unknown>, msgSucesso?: string, recarregarDetalhe = true): Promise<void> => {
       if (operacaoRef.current) return
       operacaoRef.current = true
       setOperacao(true)
@@ -101,10 +99,8 @@ export function PendenciaDetail(): ReactNode {
         if (resultado && typeof resultado === 'object' && 'id' in (resultado as Pendencia)) {
           atualizarNoState(resultado as Pendencia)
         }
-        await carregar()
+        if (recarregarDetalhe) await carregar()
         notificarMudanca()
-        void carregarDashboard(true)
-        void recarregarCatalogo()
       } catch (e) {
         pushToast('erro', 'Erro na operação', (e as Error).message)
       } finally {
@@ -112,14 +108,13 @@ export function PendenciaDetail(): ReactNode {
         setOperacao(false)
       }
     },
-    [carregar, atualizarNoState, notificarMudanca, pushToast, carregarDashboard, recarregarCatalogo]
+    [carregar, atualizarNoState, notificarMudanca, pushToast]
   )
 
   const atualizarAposAcao = useCallback(async (): Promise<void> => {
     await carregar()
     notificarMudanca()
-    void carregarDashboard(true)
-  }, [carregar, notificarMudanca, carregarDashboard])
+  }, [carregar, notificarMudanca])
 
   const mudarStatus = (status: string): void => {
     if (!dados || status === dados.status || operacaoRef.current) return
@@ -156,7 +151,7 @@ export function PendenciaDetail(): ReactNode {
       await call('pendencia', 'excluir', { id: dados.id })
       fechar(null)
       return { ok: true }
-    }, 'Pendência excluída')
+    }, 'Pendência excluída', false)
   }
 
   const adicionarChecklist = (descricao: string): void => {
