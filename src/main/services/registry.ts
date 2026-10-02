@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { ApiContext, ApiRequest, ApiResponse } from '@shared/types'
 import { AppError, encerrarSessao, validarToken, obterUsuarioPorId, hashPassword, verifyPassword } from '../auth'
 import { getPrisma } from '../db'
@@ -251,7 +252,13 @@ export async function dispatch(req: ApiRequest): Promise<ApiResponse> {
       const msg = zod.issues?.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
       return { ok: false, error: msg || 'Dados inválidos' }
     }
-    console.error('[dispatch]', req?.resource, req?.action, err)
-    return { ok: false, error: 'Erro interno. Tente novamente.' }
+    const errorId = randomUUID()
+    console.error('[dispatch] Falha não tratada', {
+      errorId,
+      resource: req?.resource,
+      action: req?.action,
+      error: err
+    })
+    return { ok: false, error: `Erro interno. Tente novamente. Referência: ${errorId}`, errorId }
   }
 }

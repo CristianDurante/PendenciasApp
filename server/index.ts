@@ -111,7 +111,7 @@ export async function criarAplicacao(): Promise<express.Express> {
     if (resultado.ok) {
       res.json(resultado)
     } else {
-      res.status(400).json(resultado)
+      res.status(resultado.errorId ? 500 : 400).json(resultado)
     }
   })
 

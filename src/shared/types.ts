@@ -300,6 +300,7 @@ export interface ApiResponse<T = unknown> {
   ok: boolean
   data?: T
   error?: string
+  errorId?: string
 }
 
 export interface ApiContext {
