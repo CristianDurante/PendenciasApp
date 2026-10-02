@@ -22,6 +22,7 @@ interface AppState {
   painelNotificacoes: boolean
   dashboard: DadosDashboard | null
   dashboardLoading: boolean
+  dashboardError: string | null
   modulosSidebar: ConfigApp['modulosSidebar']
   dataVersao: number
 
@@ -62,6 +63,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   painelNotificacoes: false,
   dashboard: null,
   dashboardLoading: false,
+  dashboardError: null,
   modulosSidebar: undefined,
   dataVersao: 0,
 
@@ -126,12 +128,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   carregarDashboard: async (forcar = false, equipeId?: string) => {
     if (get().dashboard && !forcar) return
-    set({ dashboardLoading: true })
+    set({ dashboardLoading: true, dashboardError: null })
     try {
       const dados = await call<DadosDashboard>('dashboard', 'obter', equipeId ? { equipeId } : {})
-      set({ dashboard: dados, dashboardLoading: false })
-    } catch {
-      set({ dashboardLoading: false })
+      set({ dashboard: dados, dashboardLoading: false, dashboardError: null })
+    } catch (error) {
+      set({
+        dashboardLoading: false,
+        dashboardError: error instanceof Error ? error.message : 'Falha ao carregar o dashboard.'
+      })
     }
   },
 

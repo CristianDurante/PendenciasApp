@@ -35,6 +35,7 @@ function CardContador({ rotulo, valor, cor, icone, href }: { rotulo: string; val
 export function DashboardPage(): ReactNode {
   const dashboard = useAppStore((s) => s.dashboard)
   const dashboardLoading = useAppStore((s) => s.dashboardLoading)
+  const dashboardError = useAppStore((s) => s.dashboardError)
   const carregarDashboard = useAppStore((s) => s.carregarDashboard)
   const dataVersao = useAppStore((s) => s.dataVersao)
   const carregarNotificacoes = useCatalogoStore((s) => s.carregarNotificacoes)
@@ -69,7 +70,9 @@ export function DashboardPage(): ReactNode {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <p className="text-sm text-slate-500">Não foi possível carregar o dashboard.</p>
+          <p className="text-sm text-slate-500">
+            {dashboardError || 'Não foi possível carregar o dashboard.'}
+          </p>
           <Button variant="secondary" className="mt-3" onClick={() => void carregarDashboard(true)}>
             <RefreshCw className="h-4 w-4" /> Tentar novamente
           </Button>
