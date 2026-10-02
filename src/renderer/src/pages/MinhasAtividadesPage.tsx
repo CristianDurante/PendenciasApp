@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ClipboardList, CheckCircle2, RotateCcw, ListTodo, MessageSquareReply, CalendarClock } from 'lucide-react'
 import type { DadosDashboard, Pendencia, Retorno, Compromisso } from '@shared/types'
 import { PENDENCIA_STATUS, PENDENCIA_STATUS_LABEL } from '@shared/constants'
@@ -16,40 +16,49 @@ export function MinhasAtividadesPage(): ReactNode {
 
   const [dados, setDados] = useState<DadosDashboard | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
   const [busy, setBusy] = useState('')
+  const requisicaoAtual = useRef(0)
 
   const carregar = useCallback(async (): Promise<void> => {
+    const requisicao = ++requisicaoAtual.current
     setCarregando(true)
-    const d = await call<DadosDashboard>('dashboard', 'obter').catch(() => null)
-    setDados(d)
-    setCarregando(false)
+    try {
+      const d = await call<DadosDashboard>('dashboard', 'obter')
+      if (requisicao !== requisicaoAtual.current) return
+      setDados(d)
+      setErro('')
+    } catch (e) {
+      if (requisicao !== requisicaoAtual.current) return
+      setErro(e instanceof Error ? e.message : 'Não foi possível carregar suas atividades.')
+    } finally {
+      if (requisicao === requisicaoAtual.current) setCarregando(false)
+    }
   }, [])
 
   useEffect(() => {
     void carregar()
-  }, [carregar])
-
-  useEffect(() => {
-    if (dataVersao > 0) void carregar()
+    return () => {
+      requisicaoAtual.current += 1
+    }
   }, [dataVersao, carregar])
 
   const meuId = sessao?.usuario.id
   const ehConsultor = sessao?.usuario.perfil === 'USUARIO'
 
-  function minhaPendencia(p: Pendencia): boolean {
-    return !p.responsavelId || p.responsavelId === meuId
-  }
-
-  const minhasPendencias: Pendencia[] = dados
-    ? ehConsultor
-      ? dados.minhasPendencias || []
-      : [...dados.atrasadas, ...dados.pendenciasHoje, ...dados.proximas].filter(minhaPendencia)
-    : []
+  const minhasPendencias: Pendencia[] = dados?.minhasPendencias || []
   const unicos = minhasPendencias.filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
   const meusRetornos: Retorno[] = dados
     ? [...dados.retornosAtrasados, ...dados.retornosPendentes].filter((r) => !r.responsavelId || r.responsavelId === meuId)
     : []
-  const meusCompromissos: Compromisso[] = dados ? [...dados.compromissosHoje, ...dados.proximosCompromissos] : []
+  const meusCompromissos: Compromisso[] = dados
+    ? [...dados.compromissosHoje, ...dados.proximosCompromissos].filter(
+        (c) =>
+          c.responsavelId === meuId ||
+          c.responsavelId === null ||
+          (!!meuId && (c.participantes || '').includes(meuId))
+      )
+    : []
 
   async function concluir(p: Pendencia): Promise<void> {
     setBusy(p.id)
@@ -97,11 +106,23 @@ export function MinhasAtividadesPage(): ReactNode {
     return <div className="flex h-full items-center justify-center"><Loading label="Carregando atividades…" /></div>
   }
   if (!dados) {
-    return <EmptyState titulo="Não foi possível carregar" />
+    return (
+      <EmptyState
+        titulo="Não foi possível carregar"
+        descricao={erro}
+        acao={<Button variant="secondary" onClick={() => void carregar()}>Tentar novamente</Button>}
+      />
+    )
   }
 
   return (
     <div className="space-y-4 p-4">
+      {erro && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <span>Não foi possível atualizar as atividades: {erro}</span>
+          <Button variant="secondary" size="sm" onClick={() => void carregar()}>Tentar novamente</Button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
           <ClipboardList className="h-6 w-6 text-brand-500" /> Minhas Atividades
