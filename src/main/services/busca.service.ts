@@ -1,7 +1,7 @@
 import { getPrisma } from '../db'
 import { temAcessoGlobal } from '../auth'
 import type { ApiContext } from '@shared/types'
-import { deepIso } from '../helpers'
+import { containsInsensitive, deepIso } from '../helpers'
 import { requireEmpresa } from '../auth'
 
 export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
@@ -19,10 +19,10 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
         ...ondeEquipe,
         criador: { empresaId },
         OR: [
-          { titulo: { contains: termo } },
-          { descricao: { contains: termo } },
-          { sistema: { contains: termo } },
-          { departamento: { contains: termo } }
+          { titulo: containsInsensitive(termo) },
+          { descricao: containsInsensitive(termo) },
+          { sistema: containsInsensitive(termo) },
+          { departamento: containsInsensitive(termo) }
         ]
       },
       include: { cliente: true, responsavel: { select: { id: true, nome: true } }, tags: { include: { tag: true } } },
@@ -33,23 +33,23 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       where: {
         empresaId,
         OR: [
-          { nome: { contains: termo } },
-          { empresa: { contains: termo } },
-          { contato: { contains: termo } },
-          { email: { contains: termo } }
+          { nome: containsInsensitive(termo) },
+          { empresa: containsInsensitive(termo) },
+          { contato: containsInsensitive(termo) },
+          { email: containsInsensitive(termo) }
         ]
       },
       orderBy: { nome: 'asc' },
       take: limite
     }),
     db.projeto.findMany({
-      where: { cliente: { empresaId }, OR: [{ nome: { contains: termo } }, { descricao: { contains: termo } }] },
+      where: { cliente: { empresaId }, OR: [{ nome: containsInsensitive(termo) }, { descricao: containsInsensitive(termo) }] },
       include: { cliente: true },
       orderBy: { nome: 'asc' },
       take: limite
     }),
     db.nota.findMany({
-      where: { usuario: { empresaId }, OR: [{ titulo: { contains: termo } }, { conteudo: { contains: termo } }] },
+      where: { usuario: { empresaId }, OR: [{ titulo: containsInsensitive(termo) }, { conteudo: containsInsensitive(termo) }] },
       include: { cliente: true },
       orderBy: { atualizadoEm: 'desc' },
       take: limite
@@ -58,10 +58,10 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       where: {
         cliente: { empresaId },
         OR: [
-          { titulo: { contains: termo } },
-          { descricao: { contains: termo } },
-          { local: { contains: termo } },
-          { participantes: { contains: termo } }
+          { titulo: containsInsensitive(termo) },
+          { descricao: containsInsensitive(termo) },
+          { local: containsInsensitive(termo) },
+          { participantes: containsInsensitive(termo) }
         ]
       },
       include: { cliente: true },
@@ -69,15 +69,15 @@ export async function buscaGlobal(ctx: ApiContext, args: Record<string, unknown>
       take: limite
     }),
     db.retorno.findMany({
-      where: { cliente: { empresaId }, OR: [{ assunto: { contains: termo } }, { contato: { contains: termo } }] },
+      where: { cliente: { empresaId }, OR: [{ assunto: containsInsensitive(termo) }, { contato: containsInsensitive(termo) }] },
       include: { cliente: true },
       orderBy: { criadoEm: 'desc' },
       take: limite
     }),
-    db.tag.findMany({ where: { nome: { contains: termo } }, orderBy: { nome: 'asc' }, take: limite }),
+    db.tag.findMany({ where: { nome: containsInsensitive(termo) }, orderBy: { nome: 'asc' }, take: limite }),
     db.comentario.findMany({
       where: {
-        conteudo: { contains: termo },
+        conteudo: containsInsensitive(termo),
         ...(ondeEquipe ? { pendencia: { equipeId: ctx.equipeId as string } } : {})
       },
       include: { pendencia: { select: { id: true, titulo: true } }, usuario: { select: { id: true, nome: true } } },
