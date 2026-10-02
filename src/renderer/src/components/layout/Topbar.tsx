@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Search, Bell, Plus } from 'lucide-react'
+import { Search, Bell } from 'lucide-react'
 import { useAppStore } from '../../store/appStore'
 import { useCatalogoStore } from '../../store/catalogoStore'
 import { cn } from '../../lib/format'
@@ -21,11 +21,9 @@ const titulosPorRota: Record<string, string> = {
 }
 
 export function Topbar({ rota }: { rota: string }): ReactNode {
-  const sessao = useAppStore((s) => s.sessao)
   const setPainelBusca = useAppStore((s) => s.setPainelBusca)
   const setPainelNotificacoes = useAppStore((s) => s.setPainelNotificacoes)
   const painelNotificacoes = useAppStore((s) => s.painelNotificacoes)
-  const abrirNovaPendencia = useAppStore((s) => s.abrirNovaPendencia)
   const notificacoes = useCatalogoStore((s) => s.notificacoes)
   const naoLidas = notificacoes.filter((n) => !n.lida).length
 
@@ -67,16 +65,6 @@ export function Topbar({ rota }: { rota: string }): ReactNode {
         )}
       </button>
 
-      {sessao && sessao.usuario.perfil !== 'USUARIO' && (
-        <button
-          onClick={() => abrirNovaPendencia()}
-          className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-          title="Nova Pendência (Ctrl+N)"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden lg:inline">Nova</span>
-        </button>
-      )}
     </header>
   )
 }

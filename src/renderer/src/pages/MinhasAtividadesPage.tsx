@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { RefreshCw, ClipboardList, CheckCircle2, RotateCcw, ListTodo, MessageSquareReply, CalendarClock } from 'lucide-react'
+import { ClipboardList, CheckCircle2, RotateCcw, ListTodo, MessageSquareReply, CalendarClock } from 'lucide-react'
 import type { DadosDashboard, Pendencia, Retorno, Compromisso } from '@shared/types'
 import { PENDENCIA_STATUS, PENDENCIA_STATUS_LABEL } from '@shared/constants'
 import { useAppStore } from '../store/appStore'
@@ -106,9 +106,6 @@ export function MinhasAtividadesPage(): ReactNode {
         <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-white">
           <ClipboardList className="h-6 w-6 text-brand-500" /> Minhas Atividades
         </h2>
-        <Button variant="secondary" size="sm" onClick={() => void carregar()}>
-          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-        </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
