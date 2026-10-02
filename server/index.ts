@@ -38,12 +38,18 @@ function cookies(req: express.Request): Record<string, string> {
 }
 
 export async function criarAplicacao(): Promise<express.Express> {
-  const dataDir = process.env.PENDENCIAS_DB_PATH
-    ? dirname(process.env.PENDENCIAS_DB_PATH)
-    : join(process.cwd(), '.pendencias')
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
-  if (!process.env.PENDENCIAS_DB_PATH) {
-    process.env.PENDENCIAS_DB_PATH = join(dataDir, 'pendencias.db')
+  const usaPostgres = !!process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('file:')
+  if (process.env.VERCEL === '1' && !usaPostgres) {
+    throw new Error('DATABASE_URL do Supabase é obrigatória na Vercel')
+  }
+  if (!usaPostgres) {
+    const dataDir = process.env.PENDENCIAS_DB_PATH
+      ? dirname(process.env.PENDENCIAS_DB_PATH)
+      : join(process.cwd(), '.pendencias')
+    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
+    if (!process.env.PENDENCIAS_DB_PATH) {
+      process.env.PENDENCIAS_DB_PATH = join(dataDir, 'pendencias.db')
+    }
   }
 
   await ensureDatabase()
@@ -137,4 +143,3 @@ export async function main(): Promise<void> {
   process.on('SIGINT', desligar)
   process.on('SIGTERM', desligar)
 }
-

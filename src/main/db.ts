@@ -1,9 +1,33 @@
 import { PrismaClient } from '@prisma/client'
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 let prisma: PrismaClient | null = null
+
+function carregarVariaveisDoEnv(): void {
+  const envPath = join(process.cwd(), '.env')
+  if (!existsSync(envPath)) return
+  try {
+    const conteudo = readFileSync(envPath, 'utf8')
+    for (const linha of conteudo.split(/\r?\n/)) {
+      const texto = linha.trim()
+      if (!texto || texto.startsWith('#')) continue
+      const separador = texto.indexOf('=')
+      if (separador < 0) continue
+      const chave = texto.slice(0, separador).trim()
+      let valor = texto.slice(separador + 1).trim()
+      if ((valor.startsWith('"') && valor.endsWith('"')) || (valor.startsWith("'") && valor.endsWith("'"))) {
+        valor = valor.slice(1, -1)
+      }
+      if (chave && !(chave in process.env)) process.env[chave] = valor
+    }
+  } catch {
+    // ignora falha silenciosa de leitura do .env
+  }
+}
+
+carregarVariaveisDoEnv()
 
 function getElectronApp(): { getPath(name: string): string } | null {
   if (!process.versions.electron) return null
@@ -29,6 +53,31 @@ export function resolveDbPath(): string {
 
 function usaPostgres(): boolean {
   return !!process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('file:')
+}
+
+function deveUsarFallbackSqlite(): boolean {
+  return process.env.PENDENCIAS_ALLOW_SQLITE_FALLBACK === '1' && process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'production'
+}
+
+async function tentarConexaoPostgres(): Promise<boolean> {
+  if (!usaPostgres()) return true
+  const db = getPrisma()
+  try {
+    await db.$connect()
+    return true
+  } catch (error) {
+    if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+      throw error
+    }
+    if (!deveUsarFallbackSqlite()) {
+      throw error
+    }
+    const fallback = resolveDbPath()
+    process.env.DATABASE_URL = `file:${fallback}`
+    prisma = null
+    console.warn('[db] PostgreSQL indisponível; revertendo para SQLite local em', fallback)
+    return false
+  }
 }
 
 export function resolveDataDir(): string {
@@ -171,9 +220,14 @@ function clientTemModelosNecessarios(): boolean {
 }
 
 export async function ensureDatabase(): Promise<void> {
+  if (process.env.VERCEL === '1' && !usaPostgres()) {
+    throw new Error('DATABASE_URL do Supabase é obrigatória na Vercel')
+  }
   if (usaPostgres()) {
-    await getPrisma().$connect()
-    return
+    const ok = await tentarConexaoPostgres()
+    if (ok) {
+      return
+    }
   }
   const dbPath = resolveDbPath()
   migrarBancoLegado(dbPath)

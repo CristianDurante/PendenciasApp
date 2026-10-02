@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:web",
+  "buildCommand": "npx prisma generate && npm run build:web",
   "outputDirectory": "out/renderer",
   "functions": {
     "api/[...path].ts": {
