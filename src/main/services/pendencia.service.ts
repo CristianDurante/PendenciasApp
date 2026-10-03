@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getPrisma } from '../db'
-import { AppError, exigirAcessoEquipe, temAcessoGlobal } from '../auth'
+import { AppError, exigirAcessoEquipe, requireEmpresa, temAcessoGlobal } from '../auth'
 import { EQUIPE_SEM_EQUIPE_ID, PRIORIDADES, PENDENCIA_STATUS } from '../../shared/constants'
 import type { ApiContext, FiltroPendencias, Pendencia, Prioridade, PendenciaStatus } from '@shared/types'
 import {
@@ -20,6 +20,7 @@ import { isValid, parseISO } from 'date-fns'
 
 export const pendenciaInclude = {
   criador: { select: { id: true, nome: true, avatar: true } },
+  gestor: { select: { id: true, nome: true, avatar: true } },
   responsavel: { select: { id: true, nome: true, avatar: true } },
   cliente: true,
   projeto: true,
@@ -53,6 +54,7 @@ const PendenciaCreateSchema = z.object({
   clienteId: z.string().min(1, 'Cliente é obrigatório'),
   projetoId: z.string().min(1, 'Projeto é obrigatório'),
   sistema: z.string().max(120).optional().nullable(),
+  gestorId: z.string().min(1, 'Gestor/a de Projetos é obrigatório'),
   responsavelId: z.string().min(1, 'Responsável é obrigatório'),
   prazo: z.string().min(1, 'Prazo é obrigatório'),
   horario: z.string().regex(/^\d{2}:\d{2}$/, 'Horário inválido').optional().nullable(),
@@ -73,6 +75,7 @@ const PendenciaCreateSchema = z.object({
 const PendenciaUpdateSchema = PendenciaCreateSchema.partial().omit({ checklist: true, recorrencia: true }).extend({
   clienteId: z.string().min(1).optional().nullable(),
   projetoId: z.string().min(1).optional().nullable(),
+  gestorId: z.string().min(1).optional(),
   responsavelId: z.string().min(1).optional().nullable(),
   prazo: z.string().min(1).optional().nullable(),
   recorrencia: z
@@ -201,9 +204,15 @@ export async function obterPendencia(ctx: ApiContext, args: Record<string, unkno
 export async function criarPendencia(ctx: ApiContext, args: Record<string, unknown>): Promise<unknown> {
   const db = getPrisma()
   const parsed = PendenciaCreateSchema.parse(args)
+  const empresaId = requireEmpresa(ctx)
   const hoje = new Date().toISOString().slice(0, 10)
   if (!isValid(parseISO(parsed.prazo))) throw new AppError('Prazo inválido')
   if (parsed.prazo < hoje) throw new AppError('O prazo deve ser hoje ou uma data futura')
+  const gestor = await db.usuario.findFirst({
+    where: { id: parsed.gestorId, empresaId, perfil: 'GESTOR', ativo: true },
+    select: { id: true }
+  })
+  if (!gestor) throw new AppError('Gestor/a de Projetos não encontrado ou inativo na empresa atual', 404)
   // Equipe da pendência: herda a equipe do usuário criador. Acesso global (ADM/GESTOR)
   // pode escolher a equipe no momento da criação; usuário comum fica na própria equipe.
   const equipeEscolhida = temAcessoGlobal(ctx)
@@ -221,6 +230,7 @@ export async function criarPendencia(ctx: ApiContext, args: Record<string, unkno
       clienteId: parsed.clienteId || null,
       projetoId: parsed.projetoId || null,
       sistema: parsed.sistema || null,
+      gestorId: parsed.gestorId,
       responsavelId: parsed.responsavelId || null,
       criadorId: ctx.usuarioId,
       equipeId,
@@ -275,6 +285,13 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
     if (!isValid(parseISO(parsed.prazo))) throw new AppError('Prazo inválido')
     if (parsed.prazo < new Date().toISOString().slice(0, 10)) throw new AppError('O prazo deve ser hoje ou uma data futura')
   }
+  if (parsed.gestorId !== undefined) {
+    const gestor = await db.usuario.findFirst({
+      where: { id: parsed.gestorId, empresaId: requireEmpresa(ctx), perfil: 'GESTOR', ativo: true },
+      select: { id: true }
+    })
+    if (!gestor) throw new AppError('Gestor/a de Projetos não encontrado ou inativo na empresa atual', 404)
+  }
   const anterior = await carregarComAcesso(ctx, id)
 
   let transferenciaEquipe: { origemNome: string; destinoNome: string } | null = null
@@ -284,6 +301,7 @@ export async function atualizarPendencia(ctx: ApiContext, args: Record<string, u
   if (parsed.clienteId !== undefined) data.clienteId = parsed.clienteId || null
   if (parsed.projetoId !== undefined) data.projetoId = parsed.projetoId || null
   if (parsed.sistema !== undefined) data.sistema = parsed.sistema || null
+  if (parsed.gestorId !== undefined) data.gestorId = parsed.gestorId
   if (parsed.responsavelId !== undefined) data.responsavelId = parsed.responsavelId || null
   if (parsed.prazo !== undefined) data.prazo = parsed.prazo ? parseISO(parsed.prazo) : null
   if (parsed.horario !== undefined) data.horario = parsed.horario || null

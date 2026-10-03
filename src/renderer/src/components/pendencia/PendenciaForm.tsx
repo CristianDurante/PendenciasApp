@@ -11,7 +11,7 @@ export interface PendenciaFormData {
   descricao: string
   clienteId: string
   projetoId: string
-  sistema: string
+  gestorId: string
   responsavelId: string
   prazo: string
   horario: string
@@ -30,7 +30,7 @@ const estadoInicial: PendenciaFormData = {
   descricao: '',
   clienteId: '',
   projetoId: '',
-  sistema: '',
+  gestorId: '',
   responsavelId: '',
   prazo: '',
   horario: '',
@@ -50,7 +50,7 @@ export function dadosDePendencia(p: Pendencia): PendenciaFormData {
     descricao: p.descricao || '',
     clienteId: p.clienteId || '',
     projetoId: p.projetoId || '',
-    sistema: p.sistema || '',
+    gestorId: p.gestorId || '',
     responsavelId: p.responsavelId || '',
     prazo: dataParaInput(p.prazo),
     horario: p.horario || '',
@@ -78,6 +78,7 @@ export function PendenciaForm({
   const projetos = useCatalogoStore((s) => s.projetos)
   const categorias = useCatalogoStore((s) => s.categorias)
   const usuarios = useCatalogoStore((s) => s.usuarios)
+  const gestores = usuarios.filter((usuario) => usuario.perfil === 'GESTOR' && usuario.ativo)
   const equipeDoResponsavel = usuarios.find((usuario) => usuario.id === dados.responsavelId)?.equipe?.nome || 'Sem equipe'
 
   const set = (campo: keyof PendenciaFormData, valor: string | string[]): void => {
@@ -148,8 +149,15 @@ export function PendenciaForm({
         <Input value={equipeDoResponsavel} readOnly aria-readonly="true" />
       </Field>
 
-      <Field label="Sistema">
-        <Input value={dados.sistema} onChange={(e) => set('sistema', e.target.value)} placeholder="Ex.: ERP, CRM..." />
+      <Field label="Gestor/a de Projetos (GP)" obrigatorio={!edicao}>
+        <Select value={dados.gestorId} onChange={(e) => set('gestorId', e.target.value)}>
+          <option value="">Selecione um GP</option>
+          {gestores.map((gestor) => (
+            <option key={gestor.id} value={gestor.id}>
+              {gestor.nome}
+            </option>
+          ))}
+        </Select>
       </Field>
 
       <Field label="Prazo" obrigatorio={!edicao}>

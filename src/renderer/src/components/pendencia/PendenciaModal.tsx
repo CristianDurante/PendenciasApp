@@ -20,7 +20,7 @@ export function PendenciaModal(): ReactNode {
     descricao: '',
     clienteId: '',
     projetoId: '',
-    sistema: '',
+    gestorId: '',
     responsavelId: '',
     prazo: '',
     horario: '',
@@ -48,7 +48,7 @@ export function PendenciaModal(): ReactNode {
           descricao: '',
           clienteId: (presets?.clienteId as string) || '',
           projetoId: (presets?.projetoId as string) || '',
-          sistema: '',
+          gestorId: '',
           responsavelId: (presets?.responsavelId as string) || '',
           prazo: (presets?.prazo as string) || '',
           horario: '',
@@ -71,8 +71,8 @@ export function PendenciaModal(): ReactNode {
       pushToast('erro', 'Título obrigatório', 'Informe um título para a pendência.')
       return
     }
-    if (!editandoId && (!dados.clienteId || !dados.projetoId || !dados.responsavelId || !dados.prazo)) {
-      pushToast('erro', 'Campos obrigatórios', 'Informe cliente, projeto, responsável e prazo.')
+    if (!editandoId && (!dados.clienteId || !dados.projetoId || !dados.responsavelId || !dados.gestorId || !dados.prazo)) {
+      pushToast('erro', 'Campos obrigatórios', 'Informe cliente, projeto, responsável, Gestor/a de Projetos e prazo.')
       return
     }
     if (!editandoId && dados.prazo < new Date().toISOString().slice(0, 10)) {
@@ -86,7 +86,7 @@ export function PendenciaModal(): ReactNode {
         descricao: dados.descricao,
         clienteId: dados.clienteId || null,
         projetoId: dados.projetoId || null,
-        sistema: dados.sistema,
+        ...(dados.gestorId ? { gestorId: dados.gestorId } : {}),
         responsavelId: dados.responsavelId || null,
         prazo: dados.prazo || null,
         horario: dados.horario || null,

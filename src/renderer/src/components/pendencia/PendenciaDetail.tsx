@@ -17,7 +17,6 @@ import {
   User,
   FolderKanban,
   Building2,
-  Cpu,
   Tags as TagsIcon,
   Repeat,
   StickyNote,
@@ -376,7 +375,7 @@ function VisaoGeral({
   const itens: Array<{ rotulo: string; valor: string; icone: ReactNode }> = [
     { rotulo: 'Cliente', valor: dados.cliente?.nome || '—', icone: <Building2 className="h-4 w-4" /> },
     { rotulo: 'Projeto', valor: dados.projeto?.nome || '—', icone: <FolderKanban className="h-4 w-4" /> },
-    { rotulo: 'Sistema', valor: dados.sistema || '—', icone: <Cpu className="h-4 w-4" /> },
+    { rotulo: 'Gestor/a de Projetos (GP)', valor: dados.gestor?.nome || 'Sem GP', icone: <User className="h-4 w-4" /> },
     { rotulo: 'Responsável', valor: dados.responsavel?.nome || 'Sem responsável', icone: <User className="h-4 w-4" /> },
     { rotulo: 'Categoria', valor: dados.categoria?.nome || '—', icone: <TagsIcon className="h-4 w-4" /> },
     { rotulo: 'Departamento', valor: dados.departamento || '—', icone: <Building2 className="h-4 w-4" /> },

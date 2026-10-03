@@ -143,6 +143,7 @@ export interface Pendencia {
   clienteId: string | null
   projetoId: string | null
   sistema: string | null
+  gestorId: string | null
   responsavelId: string | null
   criadorId: string
   equipeId: string | null
@@ -158,6 +159,7 @@ export interface Pendencia {
   recorrencia: string | null
   ultimaAtualizacao: string
   criador?: Usuario | null
+  gestor?: Usuario | null
   responsavel?: Usuario | null
   cliente?: Cliente | null
   projeto?: Projeto | null

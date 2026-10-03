@@ -70,6 +70,7 @@ model Usuario {
   equipesLider Equipe[]        @relation("EquipeLider")
   pendenciasCriadas Pendencia[] @relation("PendenciaCriador")
   pendenciasResponsavel Pendencia[] @relation("PendenciaResponsavel")
+  pendenciasComoGestor Pendencia[] @relation("PendenciaGestor")
   comentarios  Comentario[]
   anexos       Anexo[]
   notas        Nota[]
@@ -170,6 +171,7 @@ model Pendencia {
   clienteId     String?
   projetoId     String?
   sistema       String?
+  gestorId      String?
   responsavelId String?
   criadorId     String
   equipeId      String?
@@ -186,6 +188,7 @@ model Pendencia {
   ultimaAtualizacao DateTime @updatedAt
 
   criador    Usuario?        @relation("PendenciaCriador", fields: [criadorId], references: [id], onDelete: Restrict)
+  gestor     Usuario?        @relation("PendenciaGestor", fields: [gestorId], references: [id], onDelete: SetNull)
   responsavel Usuario?       @relation("PendenciaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   cliente    Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   projeto    Projeto?        @relation(fields: [projetoId], references: [id], onDelete: SetNull)
@@ -201,6 +204,7 @@ model Pendencia {
   @@index([prazo])
   @@index([clienteId])
   @@index([projetoId])
+  @@index([gestorId])
   @@index([responsavelId])
   @@index([equipeId])
   @@index([criadorId])
